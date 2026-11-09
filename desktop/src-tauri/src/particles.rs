@@ -60,6 +60,7 @@ pub struct ParticleCheck {
 
 /// Linux: GL draws in software when no GPU device node exists, or when the
 /// user asked Mesa for a software rasterizer.
+#[cfg(target_os = "linux")]
 pub fn software_gl(env: impl Fn(&str) -> Option<String>, gpu_device_present: bool) -> bool {
     let forced = env("LIBGL_ALWAYS_SOFTWARE").is_some_and(|value| {
         value == "1" || value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("yes")
@@ -202,6 +203,7 @@ mod tests {
         assert!(check_now(&file).previous_froze);
     }
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn software_gl_is_reported_without_a_gpu_or_when_requested() {
         let none = |_: &str| None;
@@ -215,7 +217,10 @@ mod tests {
         assert!(!software_gl(hardware, true));
         let off = |key: &str| (key == "LIBGL_ALWAYS_SOFTWARE").then(|| "0".to_string());
         assert!(!software_gl(off, true));
-        // the check passes the answer through unchanged
+    }
+
+    #[test]
+    fn the_check_passes_the_software_answer_through() {
         let file = MemoryFile::default();
         assert!(check(&file, false, true).software_gl);
         assert!(!check(&file, false, false).software_gl);
