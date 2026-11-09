@@ -5,6 +5,9 @@ THIRD_PARTY_NOTICES.txt -text
 THIRD_PARTY_NOTICES.txt -whitespace
 packaging/license-fallbacks/* -text
 packaging/attribution-supplements/* -text
+packaging/bundled-assets/* -text
+desktop/ui/fonts/licenses/* -text
+*.woff2 binary
 
 # Keep the project license identical in Linux packages and the Windows
 # portable archive while retaining normal text treatment in Git.

@@ -1,7 +1,7 @@
 # Consilium
 
 <p align="center">
-  <img src="desktop/icons/consilium.svg" width="192" alt="Consilium dragon mark">
+  <img src="desktop/icons/consilium.svg" width="160" alt="Consilium icon: a particle iris">
 </p>
 
 Consilium is a free and open-source multi-provider AI harness. Its desktop app
@@ -27,12 +27,19 @@ a subscription, account, API key, or usage payment. Those charges are between
 you and that provider; they do not unlock anything in Consilium. You can use
 the complete application without them by running a compatible model locally.
 
+<p align="center">
+  <img src="docs/consilium-0.2.0.webp" width="960" alt="Consilium 0.2.0 desktop: a conversation with a local model, the session list and connectors on the left, and the particle field in the margins">
+</p>
+
 ## What it includes
 
 - **Consilium Desktop** (`grok-chat-desktop`) — a true-black Tauri interface
-  with streaming Markdown, session history, provider/model/reasoning controls,
-  a visible routing explanation, agent mode, file and image attachments, and
-  recoverable local persistence.
+  with streaming Markdown, searchable session history, provider/model/reasoning
+  controls, a visible routing explanation, agent mode, file and image
+  attachments, and recoverable local persistence. A WebGL particle field sits
+  behind the conversation: it forms an iris on an empty chat, follows each
+  request (thinking, writing, errors) and takes the colour of the selected
+  provider family. Reading text always sits on opaque black.
 - **Consilium Terminal** (`grok-chat`) — a focused ratatui interface for Grok
   CLI or the explicitly configured xAI API route, useful over SSH and in
   terminal-first workflows.
@@ -43,17 +50,17 @@ the complete application without them by running a compatible model locally.
 
 ## Downloads
 
-Download Consilium 0.1.1 from its
-[GitHub release](https://github.com/draconitic-labs/consilium/releases/tag/v0.1.1):
+Download Consilium 0.2.0 from its
+[GitHub release](https://github.com/draconitic-labs/consilium/releases/tag/v0.2.0):
 
 | Platform | File | Notes |
 | --- | --- | --- |
-| Windows x86_64 | `Consilium_0.1.1_x64-setup.exe` | NSIS installer for the current user; downloads WebView2 if it is missing |
-| Windows x86_64 | `Consilium_0.1.1_x64_en-US.msi` | MSI installer for all users; downloads WebView2 if it is missing |
-| Windows x86_64 | `Consilium_0.1.1_windows_x86_64_portable.zip` | `Consilium.exe` without an installer; needs WebView2 already installed |
-| Linux x86_64 | `consilium-0.1.1-x86_64.AppImage` | Also listed on [AppImageHub](https://appimage.github.io/Consilium/) |
-| Linux x86_64 | `Consilium_0.1.1_amd64.deb` | Debian package |
-| Linux x86_64 | `Consilium-0.1.1-1.x86_64.rpm` | RPM package |
+| Windows x86_64 | `Consilium_0.2.0_x64-setup.exe` | NSIS installer for the current user; downloads WebView2 if it is missing |
+| Windows x86_64 | `Consilium_0.2.0_x64_en-US.msi` | MSI installer for all users; downloads WebView2 if it is missing |
+| Windows x86_64 | `Consilium_0.2.0_windows_x86_64_portable.zip` | `Consilium.exe` without an installer; needs WebView2 already installed |
+| Linux x86_64 | `consilium-0.2.0-x86_64.AppImage` | Also listed on [AppImageHub](https://appimage.github.io/Consilium/) |
+| Linux x86_64 | `Consilium_0.2.0_amd64.deb` | Debian package |
+| Linux x86_64 | `Consilium-0.2.0-1.x86_64.rpm` | RPM package |
 | Linux from source | Local Flatpak recipe | Supports local compatible endpoints and direct APIs; host provider CLIs are outside its sandbox |
 
 Every package carries the locked Rust dependency notices and the Apache-2.0
@@ -79,7 +86,11 @@ covers the twelve release crates whose archives omitted those files, and a
 reviewed supplement set supplies concrete upstream attribution for nineteen
 generic MIT materials. `packaging/generate-third-party-notices.sh --check`
 fails on stale metadata, changed material, incomplete reviewed coverage, or an
-unresolved package.
+unresolved package. Its last section covers the assets bundled into the
+desktop interface: the Inter, Space Grotesk, Geist Mono and JetBrains Mono
+fonts (SIL Open Font License 1.1) and the MIT-licensed noise functions used by
+the particle field, each checked against the hashes in
+`packaging/bundled-assets.json`.
 
 The desktop currently supports these active routes:
 
@@ -188,6 +199,11 @@ claude auth login
 codex login --device-auth
 agy
 ```
+
+The Codex model list comes from the installed Codex CLI's own catalog
+(`codex debug models`), read once per app session, with each model's
+reasoning levels. "Codex CLI default" stays first and is the only entry if the
+catalog cannot be read.
 
 Optional binary overrides are `GROK_CLI_BIN`, `CLAUDE_CLI_BIN`,
 `CODEX_CLI_BIN`, and `ANTIGRAVITY_CLI_BIN`. Optional model overrides are
@@ -402,6 +418,20 @@ inspection, and release checklist.
   mode sends conversation text without enabling provider tools.
 - `/help`, `/clear`, `/new`, and `/model <exact-id>` are available from the
   composer command menu.
+- The search box above **Recent** filters conversations by title. Each
+  conversation is marked with the colour of the provider that answered it.
+- **Setup & About** has an **Animated particle field** setting; when it is off,
+  a still image is shown and WebGL is not used. Without a GPU (software GL
+  such as llvmpipe) the field starts as a still image unless you turn the
+  setting on. While nothing is happening the field drops to 15 frames a
+  second, and it pauses while the window is in the background. The system
+  reduced-motion setting is always honored.
+- `CONSILIUM_PARTICLES=0` starts without the WebGL field; if the field ever
+  freezes while starting, the next launch shows the still image, and two
+  freezes in a row turn the setting off.
+- On Linux with the NVIDIA driver, Consilium sets
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` for WebKitGTK unless you have set it or
+  `WEBKIT_DMABUF_RENDERER_FORCE_SHM` yourself.
 - Images can be pasted, dropped, or selected. Text files are transiently
   inlined into that request; provider image support depends on the selected
   adapter. Durable history stores attachment metadata, not file contents.

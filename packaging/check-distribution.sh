@@ -125,6 +125,12 @@ grep -Fxq 'packaging/license-fallbacks/* -text' .gitattributes ||
   fail "fallback material bytes are not protected from checkout conversion"
 grep -Fxq 'packaging/attribution-supplements/* -text' .gitattributes ||
   fail "attribution supplement bytes are not protected from checkout conversion"
+[[ -s packaging/bundled-assets.json ]] || fail "bundled desktop asset manifest is missing"
+grep -Fxq 'packaging/bundled-assets/* -text' .gitattributes ||
+  fail "bundled asset license bytes are not protected from checkout conversion"
+grep -Fxq 'desktop/ui/fonts/licenses/* -text' .gitattributes ||
+  fail "font license bytes are not protected from checkout conversion"
+grep -Fxq '*.woff2 binary' .gitattributes || fail "font files are not marked binary"
 grep -Fxq 'LICENSE text eol=lf' .gitattributes ||
   fail "project license checkout line endings are not fixed"
 packaging/generate-third-party-notices.sh --check

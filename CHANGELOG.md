@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 — 2026-11-08
+
+- New desktop look: a true-black layout with a WebGL particle field behind the conversation. The field forms an iris on an empty chat, follows each request (thinking, writing, errors), and takes the colour of the selected provider family. Message text, the composer and dialogs sit on opaque black so particles never pass behind text.
+- Switching provider runs a short calibration in the field while the new provider's controls load.
+- Consilium's violet identity and per-provider colours replace the neon-red palette, in the desktop and terminal apps.
+- New particle-iris app icon. The Draconitic Labs mark appears as the publisher mark in Setup & About and the sidebar.
+- Bundled fonts: Inter, Space Grotesk, Geist Mono and JetBrains Mono (SIL Open Font License 1.1). Their licenses are in THIRD_PARTY_NOTICES.txt.
+- Session history has a search box and marks each conversation with its provider's colour.
+- Setup & About has an "Animated particle field" setting; when it is off, a still image is shown and WebGL is not used. The system reduced-motion setting is always honored.
+- The particle field starts as a still image when the GL renderer draws in software (llvmpipe, SwiftShader and similar), runs at 15 frames a second while nothing is happening, and pauses while the window is in the background.
+- If creating the particle field's WebGL context freezes (seen inside some GL drivers), the next launch shows the still image instead, and two freezes in a row turn the setting off. `CONSILIUM_PARTICLES=0` starts without WebGL.
+- The Codex model list comes from the installed Codex CLI's catalog (`codex debug models`), with each model's reasoning levels.
+- On Linux with the NVIDIA driver, WebKitGTK's DMA-BUF renderer is turned off (`WEBKIT_DISABLE_DMABUF_RENDERER=1`) unless you have chosen otherwise; with it on, creating the particle field's WebGL context could freeze inside NVIDIA's EGL.
+- The application ID, data folders and session format are unchanged.
+
 ## 0.1.1 — 2026-11-08
 
 - Load configuration only from the documented per-user location or explicit CONSILIUM_ENV_FILE.

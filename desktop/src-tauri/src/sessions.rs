@@ -81,6 +81,10 @@ pub struct SessionMeta {
     pub id: String,
     pub title: String,
     pub updated_ms: u64,
+    /// Provider recorded in the session's runtime, for the history list's
+    /// colour. Derived when listing; the session file format is unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
 }
 
 pub struct SessionStore {
@@ -148,6 +152,11 @@ impl SessionStore {
 
     fn backup_path(&self) -> PathBuf {
         self.path.with_extension("json.bak")
+    }
+
+    /// The particle-field startup guard's state, next to the session history.
+    fn particle_state_path(&self) -> PathBuf {
+        self.path.with_file_name("particle-field.state")
     }
 
     fn read_limited(path: &Path) -> Result<Option<Vec<u8>>, String> {
@@ -444,6 +453,10 @@ impl SessionStore {
             .read_all()?
             .into_iter()
             .map(|s| SessionMeta {
+                provider: s
+                    .runtime
+                    .as_ref()
+                    .and_then(|runtime| runtime.provider.clone()),
                 id: s.id,
                 title: s.title,
                 updated_ms: s.updated_ms,
@@ -500,6 +513,20 @@ impl SessionStore {
             .map_err(|error| format!("session backup could not be restored: {error}"))?;
         Self::atomic_write(&self.path, &raw)?;
         Ok(sessions.len())
+    }
+}
+
+/// The guard state uses the store's bounded read and synced atomic write.
+impl crate::particles::StateFile for SessionStore {
+    fn read_state(&self) -> Option<String> {
+        Self::read_limited(&self.particle_state_path())
+            .ok()
+            .flatten()
+            .and_then(|raw| String::from_utf8(raw).ok())
+    }
+
+    fn write_state(&self, contents: &str) -> Result<(), String> {
+        Self::atomic_write(&self.particle_state_path(), contents.as_bytes())
     }
 }
 
@@ -603,13 +630,26 @@ mod tests {
 
         store.save(sample("a", "first chat")).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(5));
-        store.save(sample("b", "second chat")).unwrap();
+        let mut routed = sample("b", "second chat");
+        routed.runtime = Some(StoredRuntime {
+            provider: Some("codex".to_string()),
+            agent: true,
+            model: None,
+            effort: None,
+            routing_profile: None,
+        });
+        store.save(routed).unwrap();
 
-        // newest first
+        // newest first, each with the provider recorded in its runtime
         let list = store.list().unwrap();
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].id, "b");
         assert_eq!(list[1].id, "a");
+        assert_eq!(list[0].provider.as_deref(), Some("codex"));
+        assert_eq!(list[1].provider, None);
+        // the listed provider is derived; the stored session format is unchanged
+        let stored = serde_json::to_value(store.load("b").unwrap()).unwrap();
+        assert!(stored.get("provider").is_none());
 
         // load returns full transcript and grok session for resume
         let loaded = store.load("a").unwrap();

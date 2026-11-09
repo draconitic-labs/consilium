@@ -1,0 +1,116 @@
+{
+  "schema": 1,
+  "entries": [
+    {
+      "name": "Inter",
+      "version": "4.1",
+      "license": "OFL-1.1",
+      "source": "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
+      "source_sha256": "9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e",
+      "files": [
+        {
+          "path": "desktop/ui/fonts/Inter-Regular.woff2",
+          "sha256": "e06f6b1bc553aaea4e4668023ed0ab0a147129c3107f511bc7d03d361b0ae085"
+        },
+        {
+          "path": "desktop/ui/fonts/Inter-Medium.woff2",
+          "sha256": "0ff3e94614e1493eb556314fd247ae6c4a85a7783b4cc86be539940cf83f2a48"
+        },
+        {
+          "path": "desktop/ui/fonts/Inter-SemiBold.woff2",
+          "sha256": "5cb7103e4e605989afebc03d989c79201e54b21b5183db33981f70db9178a301"
+        }
+      ],
+      "materials": [
+        {
+          "path": "desktop/ui/fonts/licenses/Inter-OFL.txt",
+          "origin": "LICENSE.txt in Inter-4.1.zip",
+          "sha256": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a"
+        }
+      ]
+    },
+    {
+      "name": "Space Grotesk",
+      "version": "2.0.0",
+      "license": "OFL-1.1",
+      "source": "https://github.com/floriankarsten/space-grotesk/releases/download/2.0.0/SpaceGrotesk-2.0.0.zip",
+      "source_sha256": "53b415577d4139248555300710bea0d268c7a5be67b93de53b716a9736cabffd",
+      "files": [
+        {
+          "path": "desktop/ui/fonts/SpaceGrotesk-Medium.woff2",
+          "sha256": "f20a85be4c8a74ddad94d46fcce503666498855e5a87755d75cd728d801bbe58"
+        },
+        {
+          "path": "desktop/ui/fonts/SpaceGrotesk-Bold.woff2",
+          "sha256": "06d705cebbab916f0c0fe82b6c6f4cae06aa07fd6f5ee078421206040326ef63"
+        }
+      ],
+      "materials": [
+        {
+          "path": "desktop/ui/fonts/licenses/SpaceGrotesk-OFL.txt",
+          "origin": "SpaceGrotesk-2.0.0/OFL.txt in SpaceGrotesk-2.0.0.zip",
+          "sha256": "564ce565c371c5e5bbf286006565a7c9aa55a9f56e7ca58d56e05d649dd61a72"
+        }
+      ]
+    },
+    {
+      "name": "Geist Mono",
+      "version": "1.7.2",
+      "license": "OFL-1.1",
+      "source": "https://github.com/vercel/geist-font/releases/download/v1.7.2/geist-font-v1.7.2.zip",
+      "source_sha256": "7fc800d2ac6b92844895196e5041aca55d814c15db70c44f79b3b83ab82b04e2",
+      "files": [
+        {
+          "path": "desktop/ui/fonts/GeistMono-Regular.woff2",
+          "sha256": "e4507fb4fb5f832fbbb6c06aea4206274ba3083007f23fa8cbc0e87a10acf95b"
+        },
+        {
+          "path": "desktop/ui/fonts/GeistMono-Medium.woff2",
+          "sha256": "85b99e603f84a47dc8118b5af058ad8f387d7c507a00faeef1b5b60eb371e844"
+        }
+      ],
+      "materials": [
+        {
+          "path": "desktop/ui/fonts/licenses/GeistMono-OFL.txt",
+          "origin": "geist-font/OFL.txt in geist-font-v1.7.2.zip",
+          "sha256": "c683bfbcc7e087f5d37a54ef628f10387c451a83ddc459b151403a164ac46c90"
+        }
+      ]
+    },
+    {
+      "name": "JetBrains Mono",
+      "version": "2.304",
+      "license": "OFL-1.1",
+      "source": "https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip",
+      "source_sha256": "6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf",
+      "files": [
+        {
+          "path": "desktop/ui/fonts/JetBrainsMono-Regular.woff2",
+          "sha256": "a9cb1cd82332b23a47e3a1239d25d13c86d16c4220695e34b243effa999f45f2"
+        }
+      ],
+      "materials": [
+        {
+          "path": "desktop/ui/fonts/licenses/JetBrainsMono-OFL.txt",
+          "origin": "OFL.txt in JetBrainsMono-2.304.zip",
+          "sha256": "30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad"
+        }
+      ]
+    },
+    {
+      "name": "webgl-noise",
+      "version": "6abed1e77ed1e18b181627c35f688eb30c9fe75e",
+      "license": "MIT",
+      "source": "https://github.com/ashima/webgl-noise",
+      "used_by": "noise functions in desktop/ui/aurora/engine.js",
+      "files": [],
+      "materials": [
+        {
+          "path": "packaging/bundled-assets/webgl-noise-LICENSE",
+          "origin": "https://raw.githubusercontent.com/ashima/webgl-noise/6abed1e77ed1e18b181627c35f688eb30c9fe75e/LICENSE",
+          "sha256": "bdafce1bb01517c9ae6c4f3620c01340790b5e9d039ae9e356347d1174250916"
+        }
+      ]
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod particles;
 mod sessions;
 
 use std::collections::HashMap;
@@ -54,6 +55,8 @@ struct AppState {
     config_error: Arc<Mutex<Option<String>>>,
     active_request: Arc<Mutex<Option<ActiveRequest>>>,
     store: SessionStore,
+    /// The installed Codex CLI's model catalog, read once per app session.
+    codex_catalog: Arc<tokio::sync::OnceCell<Option<Vec<codex::CodexModel>>>>,
 }
 
 impl AppState {
@@ -1013,8 +1016,22 @@ fn claude_models() -> Vec<ModelInfo> {
     ]
 }
 
-fn codex_models() -> Vec<ModelInfo> {
-    vec![ModelInfo {
+fn codex_effort_label(id: &str) -> String {
+    match id {
+        "low" => "Low Effort".into(),
+        "medium" => "Medium Effort".into(),
+        "high" => "High Effort".into(),
+        "xhigh" => "Extra High Effort".into(),
+        "max" => "Max Effort".into(),
+        "ultra" => "Ultra Effort".into(),
+        other => other.to_string(),
+    }
+}
+
+/// "Codex CLI default" first, then every model the installed Codex lists,
+/// with the efforts and default that Codex reports for each.
+fn codex_models(catalog: Option<&[codex::CodexModel]>) -> Vec<ModelInfo> {
+    let mut models = vec![ModelInfo {
         id: "default".into(),
         name: "Codex CLI default".into(),
         description: Some(
@@ -1023,7 +1040,43 @@ fn codex_models() -> Vec<ModelInfo> {
         context_window: None,
         supports_effort: true,
         efforts: codex_reasoning_efforts(),
-    }]
+    }];
+    for model in catalog.unwrap_or_default() {
+        if model.slug == "default" {
+            continue;
+        }
+        models.push(ModelInfo {
+            id: model.slug.clone(),
+            name: model.display_name.clone(),
+            description: model.description.clone(),
+            context_window: model.context_window,
+            supports_effort: !model.efforts.is_empty(),
+            efforts: model
+                .efforts
+                .iter()
+                .map(|effort| EffortInfo {
+                    id: effort.id.clone(),
+                    label: codex_effort_label(&effort.id),
+                    description: effort.description.clone().unwrap_or_default(),
+                    default: model.default_effort.as_deref() == Some(effort.id.as_str()),
+                })
+                .collect(),
+        });
+    }
+    models
+}
+
+async fn codex_catalog(state: &AppState) -> Option<Vec<codex::CodexModel>> {
+    state
+        .codex_catalog
+        .get_or_init(|| async {
+            match codex::find_codex() {
+                Some(program) => codex::discover_models(&program).await,
+                None => None,
+            }
+        })
+        .await
+        .clone()
 }
 
 fn open_model_suggestions(provider: &str) -> Vec<OpenModelInfo> {
@@ -1078,15 +1131,15 @@ fn current_api_model(provider: &str, state: &AppState) -> Vec<ModelInfo> {
 }
 
 #[tauri::command]
-fn list_models(state: State<AppState>) -> Vec<ModelInfo> {
+async fn list_models(state: State<'_, AppState>) -> Result<Vec<ModelInfo>, String> {
     let provider = state.selected_provider();
-    match provider.as_str() {
+    Ok(match provider.as_str() {
         "grok" => grok_models(),
         "gemini" => gemini_models(),
         "claude" => claude_models(),
-        "codex" => codex_models(),
+        "codex" => codex_models(codex_catalog(&state).await.as_deref()),
         _ => current_api_model(&provider, &state),
-    }
+    })
 }
 
 #[tauri::command]
@@ -1565,6 +1618,47 @@ fn restore_sessions_backup(state: State<AppState>) -> Result<usize, String> {
     state.with_idle(|| state.store.restore_backup())
 }
 
+/// Particle-field startup guard (see particles.rs): what the page should do now.
+#[tauri::command]
+fn particle_field_check(state: State<AppState>) -> particles::ParticleCheck {
+    particles::check(
+        &state.store,
+        particles::disabled_by_env(std::env::var_os("CONSILIUM_PARTICLES").as_deref()),
+        software_gl(),
+    )
+}
+
+/// Whether GL will draw in software (see particles::software_gl). On Windows,
+/// WebView2 reports the real renderer name to the page, which checks it there.
+fn software_gl() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        let gpu_device_present = Path::new("/dev/nvidia0").exists()
+            || std::fs::read_dir("/dev/dri").is_ok_and(|entries| {
+                entries
+                    .flatten()
+                    .any(|entry| entry.file_name().to_string_lossy().starts_with("renderD"))
+            });
+        particles::software_gl(|key| std::env::var(key).ok(), gpu_device_present)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
+/// Records, synced to disk, that the page is about to create the WebGL context.
+#[tauri::command]
+fn particle_field_begin(state: State<AppState>) -> Result<(), String> {
+    particles::begin(&state.store)
+}
+
+/// Records that the context exists and the first frame was drawn.
+#[tauri::command]
+fn particle_field_finish(state: State<AppState>) -> Result<(), String> {
+    particles::finish(&state.store)
+}
+
 #[tauri::command]
 fn app_info(state: State<AppState>) -> AppInfo {
     AppInfo {
@@ -1729,7 +1823,36 @@ fn initial_route() -> (String, String, HashMap<String, Backend>, Option<String>)
     (provider, profile, backends, config_error)
 }
 
+/// On the NVIDIA driver, WebKitGTK's DMA-BUF renderer gives a blank window under
+/// X11, and creating a WebGL context with it can hang inside NVIDIA's EGL (8 of
+/// 70 Wayland launches froze with shared-memory DMA-BUF buffers, 0 of 70 with
+/// the DMA-BUF renderer off). Turning that renderer off avoids both. A choice
+/// the user already made in either variable is kept.
+#[cfg(target_os = "linux")]
+fn webkit_env_for_nvidia(
+    nvidia_driver: bool,
+    user_has_set: impl Fn(&str) -> bool,
+) -> Option<(&'static str, &'static str)> {
+    if !nvidia_driver
+        || user_has_set("WEBKIT_DMABUF_RENDERER_FORCE_SHM")
+        || user_has_set("WEBKIT_DISABLE_DMABUF_RENDERER")
+    {
+        return None;
+    }
+    Some(("WEBKIT_DISABLE_DMABUF_RENDERER", "1"))
+}
+
 fn main() {
+    // Before any thread starts: WebKitGTK reads this when the window opens.
+    #[cfg(target_os = "linux")]
+    if let Some((key, value)) =
+        webkit_env_for_nvidia(Path::new("/proc/driver/nvidia/version").exists(), |key| {
+            std::env::var_os(key).is_some()
+        })
+    {
+        std::env::set_var(key, value);
+    }
+
     let mut args = std::env::args_os().skip(1);
     if args.next().as_deref() == Some(OsStr::new("--gemini-login")) {
         #[cfg(unix)]
@@ -1775,6 +1898,7 @@ fn main() {
             config_error: Arc::new(Mutex::new(config_error)),
             active_request: Arc::new(Mutex::new(None)),
             store: SessionStore::at_default_location(),
+            codex_catalog: Arc::new(tokio::sync::OnceCell::new()),
         })
         .invoke_handler(tauri::generate_handler![
             status,
@@ -1799,6 +1923,9 @@ fn main() {
             delete_session,
             session_store_health,
             restore_sessions_backup,
+            particle_field_check,
+            particle_field_begin,
+            particle_field_finish,
             app_info,
             smoke_mode,
             smoke_config,
@@ -1811,6 +1938,60 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn nvidia_driver_turns_off_the_dmabuf_renderer_unless_the_user_chose() {
+        let none_set = |_: &str| false;
+        assert_eq!(
+            webkit_env_for_nvidia(true, none_set),
+            Some(("WEBKIT_DISABLE_DMABUF_RENDERER", "1"))
+        );
+        assert_eq!(webkit_env_for_nvidia(false, none_set), None);
+        for chosen in [
+            "WEBKIT_DMABUF_RENDERER_FORCE_SHM",
+            "WEBKIT_DISABLE_DMABUF_RENDERER",
+        ] {
+            assert_eq!(
+                webkit_env_for_nvidia(true, |key: &str| key == chosen),
+                None,
+                "{chosen}"
+            );
+        }
+    }
+
+    #[test]
+    fn codex_models_lead_with_the_cli_default_then_list_the_catalog() {
+        let catalog = codex::parse_model_catalog(include_str!(
+            "../../../core/tests/fixtures/codex-debug-models-0.167.0.json"
+        ));
+        let models = codex_models(Some(&catalog));
+        assert_eq!(models[0].id, "default");
+        assert_eq!(models.len(), catalog.len() + 1);
+        let sol = &models[1];
+        assert_eq!(sol.id, "gpt-6.1-sol");
+        assert_eq!(sol.name, "GPT-6.1-Sol");
+        assert!(sol.supports_effort);
+        let defaults: Vec<&str> = sol
+            .efforts
+            .iter()
+            .filter(|effort| effort.default)
+            .map(|effort| effort.id.as_str())
+            .collect();
+        assert_eq!(defaults, ["low"]);
+        assert_eq!(
+            sol.efforts.last().map(|effort| effort.label.as_str()),
+            Some("Ultra Effort")
+        );
+        assert!(sol
+            .efforts
+            .iter()
+            .all(|effort| !effort.description.is_empty()));
+
+        let fallback = codex_models(None);
+        assert_eq!(fallback.len(), 1);
+        assert_eq!(fallback[0].id, "default");
+    }
 
     #[cfg(unix)]
     #[test]
