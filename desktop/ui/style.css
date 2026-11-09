@@ -378,11 +378,9 @@ body {
   color: var(--muted);
   font-size: 0.74rem;
   letter-spacing: 0.04em;
-  text-decoration: none;
   border-top: 1px solid var(--edge-soft);
   padding-top: 9px;
 }
-.publisher:hover { color: var(--dim); }
 .publisher-mark { width: 22px; height: 22px; object-fit: contain; flex: none; }
 kbd {
   background: var(--code-bg);
