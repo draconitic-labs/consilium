@@ -27,6 +27,10 @@ a subscription, account, API key, or usage payment. Those charges are between
 you and that provider; they do not unlock anything in Consilium. You can use
 the complete application without them by running a compatible model locally.
 
+<p align="center">
+  <img src="docs/consilium-0.2.0.webp" width="960" alt="Consilium 0.2.0 desktop: a conversation with a local model, the session list and connectors on the left, and the particle field in the margins">
+</p>
+
 ## What it includes
 
 - **Consilium Desktop** (`grok-chat-desktop`) — a true-black Tauri interface
