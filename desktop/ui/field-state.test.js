@@ -1,6 +1,6 @@
 // Run with: node field-state.test.js
 const assert = require("assert");
-const { WORLDS, worldForProvider, moodForState } = require("./field-state.js");
+const { WORLDS, worldForProvider, moodForState, particleStart } = require("./field-state.js");
 
 // every vendor's CLI and direct API share one hue world
 assert.strictEqual(worldForProvider("codex"), "codex");
@@ -39,5 +39,27 @@ assert.strictEqual(moodForState("startup failed"), "error");
 for (const text of ["ready", "stopping…", "provider is still stopping…", "", undefined]) {
   assert.strictEqual(moodForState(text), "idle", String(text));
 }
+
+// the particle-field startup decision
+const start = (overrides) =>
+  particleStart({ envDisabled: false, motionOn: true, previousFroze: false, consecutiveFreezes: 0, ...overrides });
+assert.deepStrictEqual(start({}), { webgl: true, turnOff: false, reason: "ok" });
+// CONSILIUM_PARTICLES=0 wins over everything else
+assert.deepStrictEqual(start({ envDisabled: true, previousFroze: true, consecutiveFreezes: 5 }), {
+  webgl: false, turnOff: false, reason: "environment",
+});
+// one frozen start: still image this session, setting untouched, next launch retries
+assert.deepStrictEqual(start({ previousFroze: true, consecutiveFreezes: 1 }), {
+  webgl: false, turnOff: false, reason: "froze",
+});
+// two in a row: still image and the setting goes off
+assert.deepStrictEqual(start({ previousFroze: true, consecutiveFreezes: 2 }), {
+  webgl: false, turnOff: true, reason: "froze",
+});
+assert.strictEqual(start({ previousFroze: true, consecutiveFreezes: 3 }).turnOff, true);
+// a count from earlier freezes alone does not block a start that is not frozen
+assert.strictEqual(start({ consecutiveFreezes: 2 }).webgl, true);
+// the user's setting off means no WebGL at all
+assert.deepStrictEqual(start({ motionOn: false }), { webgl: false, turnOff: false, reason: "setting" });
 
 console.log("field-state tests passed");

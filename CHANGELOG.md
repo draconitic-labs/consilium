@@ -8,7 +8,8 @@
 - New particle-iris app icon. The Draconitic Labs mark appears as the publisher mark in Setup & About and the sidebar.
 - Bundled fonts: Inter, Space Grotesk, Geist Mono and JetBrains Mono (SIL Open Font License 1.1). Their licenses are in THIRD_PARTY_NOTICES.txt.
 - Session history has a search box and marks each conversation with its provider's colour.
-- Setup & About has an "Animated particle field" setting; the system reduced-motion setting is always honored.
+- Setup & About has an "Animated particle field" setting; when it is off, a still image is shown and WebGL is not used. The system reduced-motion setting is always honored.
+- If creating the particle field's WebGL context freezes (seen inside some GL drivers), the next launch shows the still image instead, and two freezes in a row turn the setting off. `CONSILIUM_PARTICLES=0` starts without WebGL.
 - The Codex model list comes from the installed Codex CLI's catalog (`codex debug models`), with each model's reasoning levels.
 - On Linux with the NVIDIA driver, WebKitGTK uses shared-memory buffers (`WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`) unless you have chosen otherwise.
 - The application ID, data folders and session format are unchanged.

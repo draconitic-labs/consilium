@@ -86,6 +86,58 @@ function readMotionPreference() {
   }
 }
 
+function writeMotionPreference(on) {
+  try {
+    localStorage.setItem(MOTION_KEY, on ? "on" : "off");
+  } catch {
+    // the choice still applies to this window
+  }
+}
+
+// Starts the particle field once the first load is done. Creating a WebGL
+// context can hang inside some GL drivers, so a startup guard
+// (particle_field_check/begin/finish, see particles.rs) remembers a start that
+// never finished: the next launch shows the still image instead, and two such
+// starts in a row turn the setting off.
+async function startParticleField() {
+  let check = { env_disabled: false, previous_froze: false, consecutive_freezes: 0 };
+  try {
+    check = await invoke("particle_field_check");
+  } catch {
+    // outside the desktop shell there is no guard; start normally
+  }
+  const decision = fieldState.particleStart({
+    envDisabled: check.env_disabled,
+    motionOn: readMotionPreference(),
+    previousFroze: check.previous_froze,
+    consecutiveFreezes: check.consecutive_freezes,
+  });
+  if (decision.turnOff) {
+    writeMotionPreference(false);
+    $("motion-toggle").checked = false;
+    addInfo(
+      "The particle field froze twice in a row while starting, so it is now off. Turn it back on in Setup & About."
+    );
+  }
+  await createField($("field"), decision.webgl);
+}
+
+async function createField(canvas, webgl) {
+  if (webgl) {
+    try {
+      await invoke("particle_field_begin");
+    } catch {
+      // without the guard the field still starts
+    }
+  }
+  window.ConsiliumAurora.initAurora(canvas, {
+    webgl,
+    onStarted: () => invoke("particle_field_finish").catch(() => {}),
+  });
+  window.ConsiliumField = window.ConsiliumAurora.aurora;
+  document.dispatchEvent(new Event("consilium-field-ready"));
+}
+
 // The iris is a circle centred in the free space above the empty-state title.
 function irisAboveTitle() {
   const canvas = $("field");
@@ -177,7 +229,7 @@ async function bootField() {
   f.setMotion(fieldWanted.motion);
   f.setProvider(fieldWanted.world);
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (fieldWanted.motion && !reduced && !emptyState.hidden && !fieldSwitching) {
+  if (fieldWanted.motion && !reduced && !emptyState.hidden && !fieldSwitching && !f.isFallback()) {
     // the wordmark forms from the particles, then becomes the iris
     try {
       await document.fonts.load('700 150px "Space Grotesk"');
@@ -1771,15 +1823,21 @@ async function openSetupAbout() {
 }
 
 $("motion-toggle").checked = readMotionPreference();
-$("motion-toggle").addEventListener("change", () => {
+$("motion-toggle").addEventListener("change", async () => {
   const on = $("motion-toggle").checked;
-  try {
-    localStorage.setItem(MOTION_KEY, on ? "on" : "off");
-  } catch {
-    // the choice still applies to this window
-  }
+  writeMotionPreference(on);
   fieldWanted.motion = on;
-  field()?.setMotion(on);
+  if (on && field()?.isFallback()) {
+    // the still image was drawn on a 2D canvas; WebGL needs a fresh one
+    const still = $("field");
+    const fresh = still.cloneNode(false);
+    still.replaceWith(fresh);
+    await createField(fresh, true);
+    field()?.setProvider(fieldWanted.world);
+    syncField(true);
+  } else {
+    field()?.setMotion(on);
+  }
 });
 
 $("open-setup-about").addEventListener("click", openSetupAbout);
@@ -1983,7 +2041,8 @@ boot()
   })
   .finally(() => {
     // The particle field starts only after the first load, so its WebGL setup
-    // never competes with the startup calls (aurora/field.js waits for this).
-    window.ConsiliumUiReady = true;
-    document.dispatchEvent(new Event("consilium-ui-ready"));
+    // never competes with the startup calls.
+    const begin = () => startParticleField().catch((error) => console.error("particle field", error));
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", begin, { once: true });
+    else setTimeout(begin, 0);
   });

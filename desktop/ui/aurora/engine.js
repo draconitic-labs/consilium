@@ -404,8 +404,9 @@ function makeTarget(gl, w, h) {
 }
 
 class Aurora {
-  constructor(canvas) {
+  constructor(canvas, opts = {}) {
     this.canvas = canvas;
+    this.onStarted = opts.onStarted;
     this.gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false, powerPreference: 'high-performance' });
     this.ok = !!this.gl;
     if (!this.ok) return;
@@ -447,6 +448,8 @@ class Aurora {
 
     this.setFormation(MOODS.idle.formation, {}, 1);
     this.start();
+    // a hidden window draws no frames; the context exists, so the start is done
+    if (document.hidden) this.reportStarted();
   }
 
   snap(m, world) {
@@ -711,6 +714,7 @@ class Aurora {
     this.drawPoints(1.0);
     gl.disable(gl.BLEND);
     gl.bindVertexArray(null);
+    this.reportStarted();
 
     /* adaptive quality */
     const frame = performance.now() - now;
@@ -753,6 +757,13 @@ class Aurora {
     this.gl.drawArrays(this.gl.POINTS, 0, this.count);
   }
 
+  /* the context exists and a frame was drawn: tell the startup guard once */
+  reportStarted() {
+    if (this.startedReported) return;
+    this.startedReported = true;
+    try { this.onStarted?.(); } catch (e) { console.error(e); }
+  }
+
   start() { if (this.ok && !this.running) { this.running = true; this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.step(t)); } }
   stop() { this.running = false; if (this.raf) cancelAnimationFrame(this.raf); }
 }
@@ -782,13 +793,21 @@ function staticFallback(canvas) {
 }
 
 let engine = null;
-function initAurora(canvas) {
+/* opts.webgl === false draws the still fallback without touching WebGL;
+   opts.onStarted runs once the WebGL field has drawn its first frame, or as
+   soon as it falls back because WebGL is unavailable. */
+function initAurora(canvas, opts = {}) {
+  if (opts.webgl === false) {
+    engine = staticFallback(canvas);
+    return engine;
+  }
   try {
-    engine = new Aurora(canvas);
-    if (!engine.ok) engine = staticFallback(canvas);
+    engine = new Aurora(canvas, opts);
+    if (!engine.ok) { engine = staticFallback(canvas); opts.onStarted?.(); }
   } catch (e) {
     console.error('aurora init failed', e);
     engine = staticFallback(canvas);
+    opts.onStarted?.();
   }
   return engine;
 }
@@ -802,6 +821,7 @@ const aurora = {
   pulse: (x, y, s) => engine?.pulse?.(x, y, s),
   setDim: (v) => engine?.setDim?.(v),
   frameEma: () => engine?.frameEma ?? 0,
+  isFallback: () => !!engine?.fallback,
 };
 
 global.ConsiliumAurora = { initAurora, aurora };

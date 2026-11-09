@@ -43,7 +43,20 @@
     }
   }
 
-  const api = { WORLD_BY_PROVIDER, WORLDS, worldForProvider, moodForState };
+  // How to start the particle field this session, from the startup guard's
+  // check (see desktop/src-tauri/src/particles.rs) and the user's setting.
+  // "webgl" starts the animated field; otherwise the still fallback is drawn
+  // and WebGL is never touched. Two frozen starts in a row turn the setting off.
+  function particleStart({ envDisabled, motionOn, previousFroze, consecutiveFreezes }) {
+    if (envDisabled) return { webgl: false, turnOff: false, reason: "environment" };
+    if (previousFroze) {
+      return { webgl: false, turnOff: (consecutiveFreezes || 0) >= 2, reason: "froze" };
+    }
+    if (!motionOn) return { webgl: false, turnOff: false, reason: "setting" };
+    return { webgl: true, turnOff: false, reason: "ok" };
+  }
+
+  const api = { WORLD_BY_PROVIDER, WORLDS, worldForProvider, moodForState, particleStart };
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   } else {

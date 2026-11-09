@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod particles;
 mod sessions;
 
 use std::collections::HashMap;
@@ -1617,6 +1618,27 @@ fn restore_sessions_backup(state: State<AppState>) -> Result<usize, String> {
     state.with_idle(|| state.store.restore_backup())
 }
 
+/// Particle-field startup guard (see particles.rs): what the page should do now.
+#[tauri::command]
+fn particle_field_check(state: State<AppState>) -> particles::ParticleCheck {
+    particles::check(
+        &state.store,
+        particles::disabled_by_env(std::env::var_os("CONSILIUM_PARTICLES").as_deref()),
+    )
+}
+
+/// Records, synced to disk, that the page is about to create the WebGL context.
+#[tauri::command]
+fn particle_field_begin(state: State<AppState>) -> Result<(), String> {
+    particles::begin(&state.store)
+}
+
+/// Records that the context exists and the first frame was drawn.
+#[tauri::command]
+fn particle_field_finish(state: State<AppState>) -> Result<(), String> {
+    particles::finish(&state.store)
+}
+
 #[tauri::command]
 fn app_info(state: State<AppState>) -> AppInfo {
     AppInfo {
@@ -1879,6 +1901,9 @@ fn main() {
             delete_session,
             session_store_health,
             restore_sessions_backup,
+            particle_field_check,
+            particle_field_begin,
+            particle_field_finish,
             app_info,
             smoke_mode,
             smoke_config,

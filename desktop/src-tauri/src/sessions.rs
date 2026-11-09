@@ -154,6 +154,11 @@ impl SessionStore {
         self.path.with_extension("json.bak")
     }
 
+    /// The particle-field startup guard's state, next to the session history.
+    fn particle_state_path(&self) -> PathBuf {
+        self.path.with_file_name("particle-field.state")
+    }
+
     fn read_limited(path: &Path) -> Result<Option<Vec<u8>>, String> {
         let metadata = match std::fs::metadata(path) {
             Ok(metadata) => metadata,
@@ -508,6 +513,20 @@ impl SessionStore {
             .map_err(|error| format!("session backup could not be restored: {error}"))?;
         Self::atomic_write(&self.path, &raw)?;
         Ok(sessions.len())
+    }
+}
+
+/// The guard state uses the store's bounded read and synced atomic write.
+impl crate::particles::StateFile for SessionStore {
+    fn read_state(&self) -> Option<String> {
+        Self::read_limited(&self.particle_state_path())
+            .ok()
+            .flatten()
+            .and_then(|raw| String::from_utf8(raw).ok())
+    }
+
+    fn write_state(&self, contents: &str) -> Result<(), String> {
+        Self::atomic_write(&self.particle_state_path(), contents.as_bytes())
     }
 }
 
