@@ -56,7 +56,29 @@
     return { webgl: true, turnOff: false, reason: "ok" };
   }
 
-  const api = { WORLD_BY_PROVIDER, WORLDS, worldForProvider, moodForState, particleStart };
+  // GL renderers that draw in software: the animated field would keep most of
+  // a CPU core busy, so it starts as a still image there.
+  const SOFTWARE_RENDERER =
+    /llvmpipe|softpipe|lavapipe|swiftshader|basic render|software rasterizer|swrast|mesa offscreen|mesa x11/i;
+
+  function isSoftwareRenderer(name) {
+    return typeof name === "string" && SOFTWARE_RENDERER.test(name);
+  }
+
+  // Moods where nothing is happening; the field drops to a low frame rate.
+  function isIdleMood(mood) {
+    return mood === "idle" || mood === "iris";
+  }
+
+  const api = {
+    WORLD_BY_PROVIDER,
+    WORLDS,
+    worldForProvider,
+    moodForState,
+    particleStart,
+    isSoftwareRenderer,
+    isIdleMood,
+  };
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   } else {

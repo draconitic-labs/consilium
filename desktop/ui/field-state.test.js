@@ -1,6 +1,6 @@
 // Run with: node field-state.test.js
 const assert = require("assert");
-const { WORLDS, worldForProvider, moodForState, particleStart } = require("./field-state.js");
+const { WORLDS, worldForProvider, moodForState, particleStart, isSoftwareRenderer, isIdleMood } = require("./field-state.js");
 
 // every vendor's CLI and direct API share one hue world
 assert.strictEqual(worldForProvider("codex"), "codex");
@@ -61,5 +61,40 @@ assert.strictEqual(start({ previousFroze: true, consecutiveFreezes: 3 }).turnOff
 assert.strictEqual(start({ consecutiveFreezes: 2 }).webgl, true);
 // the user's setting off means no WebGL at all
 assert.deepStrictEqual(start({ motionOn: false }), { webgl: false, turnOff: false, reason: "setting" });
+
+// software renderers start the field as a still image
+for (const name of [
+  "llvmpipe (LLVM 19.1.7, 256 bits)",
+  "ANGLE (Mesa, llvmpipe (LLVM 19.1.7, 256 bits), OpenGL ES 3.2)",
+  "softpipe",
+  "Gallium 0.4 on softpipe",
+  "Google SwiftShader",
+  "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "Microsoft Basic Render Driver",
+  "Software Rasterizer",
+  "Mesa OffScreen",
+  "llvmpipe",
+  "lavapipe",
+]) {
+  assert.strictEqual(isSoftwareRenderer(name), true, name);
+}
+for (const name of [
+  "NVIDIA GeForce RTX 4060/PCIe/SSE2",
+  "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060/PCIe/SSE2, OpenGL ES 3.2 NVIDIA 615.78.08)",
+  "AMD Radeon RX 7800 XT (radeonsi, navi32, LLVM 19.1.7, DRM 3.59)",
+  "Mesa Intel(R) UHD Graphics 620 (KBL GT2)",
+  "WebKit WebGL",
+  "",
+  undefined,
+]) {
+  assert.strictEqual(isSoftwareRenderer(name), false, String(name));
+}
+
+// only moods with nothing happening run at the low frame rate
+assert.strictEqual(isIdleMood("idle"), true);
+assert.strictEqual(isIdleMood("iris"), true);
+for (const mood of ["thinking", "streaming", "error", "calibrating", "tool", undefined]) {
+  assert.strictEqual(isIdleMood(mood), false, String(mood));
+}
 
 console.log("field-state tests passed");

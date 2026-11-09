@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
 use serde_json::Value;
-use tokio::io::{AsyncWriteExt, BufReader};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio_util::sync::CancellationToken;
 
 use crate::api::{send_stream_event, StreamEvent, StreamEventSender};
@@ -41,10 +41,14 @@ const CODEX_CATALOG_MAX_BYTES: usize = 8 * 1024 * 1024;
 const CODEX_CATALOG_MAX_MODELS: usize = 64;
 
 /// Model slugs and effort ids reach the Codex command line, so only plain
-/// identifiers are accepted.
+/// identifiers are accepted. The first character must be a letter or digit so
+/// a value can never be read as an option such as `--config`.
 fn is_plain_identifier(value: &str, max_len: usize) -> bool {
-    !value.is_empty()
-        && value.len() <= max_len
+    value.len() <= max_len
+        && value
+            .chars()
+            .next()
+            .is_some_and(|first| first.is_ascii_alphanumeric())
         && value
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ':'))
@@ -140,20 +144,47 @@ pub async fn discover_models(program: &Path) -> Option<Vec<CodexModel>> {
     let mut command = tokio::process::Command::new(program);
     command
         .args(["debug", "models"])
-        .env_remove("OPENAI_API_KEY")
+        .env_remove("OPENAI_API_KEY");
+    let output = bounded_output(command, CODEX_CATALOG_TIMEOUT, CODEX_CATALOG_MAX_BYTES).await?;
+    let models = parse_model_catalog(std::str::from_utf8(&output).ok()?);
+    (!models.is_empty()).then_some(models)
+}
+
+/// Runs a short read-only command in its own process group and returns its
+/// standard output if it exits successfully within `timeout` and prints at most
+/// `max_bytes`. Otherwise the whole process tree is killed, as for `codex exec`.
+async fn bounded_output(
+    mut command: tokio::process::Command,
+    timeout: Duration,
+    max_bytes: usize,
+) -> Option<Vec<u8>> {
+    command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    let output = tokio::time::timeout(CODEX_CATALOG_TIMEOUT, command.output())
-        .await
-        .ok()?
-        .ok()?;
-    if !output.status.success() || output.stdout.len() > CODEX_CATALOG_MAX_BYTES {
-        return None;
+        .stderr(Stdio::null());
+    let mut child = ManagedChild::spawn(&mut command).ok()?;
+    let stdout = child.take_stdout()?;
+    let finished = tokio::time::timeout(timeout, async {
+        let mut output = Vec::new();
+        stdout
+            .take(max_bytes as u64 + 1)
+            .read_to_end(&mut output)
+            .await
+            .ok()?;
+        if output.len() > max_bytes {
+            return None;
+        }
+        let status = child.wait().await.ok()?;
+        status.success().then_some(output)
+    })
+    .await;
+    match finished {
+        Ok(Some(output)) => Some(output),
+        _ => {
+            child.terminate().await;
+            None
+        }
     }
-    let models = parse_model_catalog(std::str::from_utf8(&output.stdout).ok()?);
-    (!models.is_empty()).then_some(models)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -571,6 +602,7 @@ mod tests {
              "default_reasoning_level":"ultra",
              "supported_reasoning_levels":[{"effort":"low"},{"effort":"high\"; rm"},{"effort":"medium"}]},
             {"slug":"bad slug\";x","visibility":"list","priority":1},
+            {"slug":"--config","visibility":"list","priority":1},
             {"slug":"hidden","visibility":"hide","priority":0},
             {"display_name":"no slug","visibility":"list"},
             {"slug":"good-1","display_name":"Duplicate","visibility":"list","priority":3},
@@ -599,6 +631,58 @@ mod tests {
         assert!(parse_model_catalog("not json").is_empty());
         assert!(parse_model_catalog(r#"{"models":"nope"}"#).is_empty());
         assert!(parse_model_catalog("[]").is_empty());
+    }
+
+    #[test]
+    fn identifiers_must_start_with_a_letter_or_digit() {
+        for good in ["gpt-6.1-sol", "o3", "5x", "model_a:b"] {
+            assert!(is_plain_identifier(good, 128), "{good}");
+        }
+        for bad in [
+            "", "-rf", "--config", ".hidden", "_x", ":x", "a b", "a;b", "a\"b",
+        ] {
+            assert!(!is_plain_identifier(bad, 128), "{bad:?}");
+        }
+        assert!(!is_plain_identifier("abcd", 3));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn bounded_output_returns_small_successful_output() {
+        let mut command = tokio::process::Command::new("sh");
+        command.args(["-c", "printf catalog"]);
+        assert_eq!(
+            bounded_output(command, Duration::from_secs(5), 64).await,
+            Some(b"catalog".to_vec())
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn bounded_output_rejects_oversized_failed_and_slow_commands() {
+        let mut oversized = tokio::process::Command::new("sh");
+        oversized.args(["-c", "head -c 4096 /dev/zero"]);
+        assert_eq!(
+            bounded_output(oversized, Duration::from_secs(5), 100).await,
+            None
+        );
+
+        let mut failed = tokio::process::Command::new("sh");
+        failed.args(["-c", "printf partial; exit 3"]);
+        assert_eq!(
+            bounded_output(failed, Duration::from_secs(5), 64).await,
+            None
+        );
+
+        // a command that never finishes is killed at the timeout
+        let started = std::time::Instant::now();
+        let mut slow = tokio::process::Command::new("sh");
+        slow.args(["-c", "sleep 30 & sleep 30"]);
+        assert_eq!(
+            bounded_output(slow, Duration::from_millis(300), 64).await,
+            None
+        );
+        assert!(started.elapsed() < Duration::from_secs(5));
     }
 
     #[tokio::test]

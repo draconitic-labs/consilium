@@ -1624,7 +1624,27 @@ fn particle_field_check(state: State<AppState>) -> particles::ParticleCheck {
     particles::check(
         &state.store,
         particles::disabled_by_env(std::env::var_os("CONSILIUM_PARTICLES").as_deref()),
+        software_gl(),
     )
+}
+
+/// Whether GL will draw in software (see particles::software_gl). On Windows,
+/// WebView2 reports the real renderer name to the page, which checks it there.
+fn software_gl() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        let gpu_device_present = Path::new("/dev/nvidia0").exists()
+            || std::fs::read_dir("/dev/dri").is_ok_and(|entries| {
+                entries
+                    .flatten()
+                    .any(|entry| entry.file_name().to_string_lossy().starts_with("renderD"))
+            });
+        particles::software_gl(|key| std::env::var(key).ok(), gpu_device_present)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
 }
 
 /// Records, synced to disk, that the page is about to create the WebGL context.

@@ -410,6 +410,14 @@ class Aurora {
     this.gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false, powerPreference: 'high-performance' });
     this.ok = !!this.gl;
     if (!this.ok) return;
+    // the GL renderer's name, so the page can tell software rendering apart
+    const debugInfo = this.gl.getExtension('WEBGL_debug_renderer_info');
+    this.rendererName = String(this.gl.getParameter(debugInfo ? debugInfo.UNMASKED_RENDERER_WEBGL : this.gl.RENDERER) || '');
+    // idle: at most 15 frames a second, except for a few seconds after the
+    // pointer moves; a window that loses focus pauses entirely
+    this.idleThrottle = false;
+    this.activeUntil = 0;
+    this.timer = null;
     this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     this.mood = 'idle';
@@ -433,6 +441,8 @@ class Aurora {
     this.resize();
     new ResizeObserver(() => this.resize()).observe(canvas);
     document.addEventListener('visibilitychange', () => { document.hidden ? this.stop() : this.start(); });
+    addEventListener('blur', () => this.stop());
+    addEventListener('focus', () => { if (!document.hidden) this.start(); });
     const toClip = (e) => {
       const r = canvas.getBoundingClientRect();
       return [((e.clientX - r.left) / Math.max(1, r.width)) * 2 - 1, -(((e.clientY - r.top) / Math.max(1, r.height)) * 2 - 1)];
@@ -440,10 +450,12 @@ class Aurora {
     addEventListener('pointermove', (e) => {
       [this.pointer.x, this.pointer.y] = toClip(e);
       this.pointer.s = Math.min(1, this.pointer.s + 0.22);
+      this.wake();
     }, { passive: true });
     addEventListener('pointerdown', (e) => {
       [this.click.x, this.click.y] = toClip(e);
       this.click.age = 0; this.click.s = 0.9;
+      this.wake();
     }, { passive: true });
 
     this.setFormation(MOODS.idle.formation, {}, 1);
@@ -592,6 +604,30 @@ class Aurora {
   }
   pulse(x = 0, y = 0, s = 0.9) { this.click = { x, y, age: 0, s }; }
   setDim(v) { this.dimTarget = Math.max(0, Math.min(0.7, v)); }
+  /* idle moods run at a low frame rate; anything happening runs at full rate */
+  setIdle(on) {
+    this.idleThrottle = !!on;
+    if (!on) this.wake();
+  }
+  /* back to full rate now, and for a few seconds */
+  wake() {
+    this.activeUntil = performance.now() + 3000;
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+      if (this.running) this.raf = requestAnimationFrame((t) => this.step(t));
+    }
+  }
+  scheduleNext() {
+    if (this.idleThrottle && performance.now() > this.activeUntil) {
+      this.timer = setTimeout(() => {
+        this.timer = null;
+        if (this.running) this.raf = requestAnimationFrame((t) => this.step(t));
+      }, 1000 / 15);
+    } else {
+      this.raf = requestAnimationFrame((t) => this.step(t));
+    }
+  }
 
   /* ── frame ── */
   step(now) {
@@ -725,7 +761,7 @@ class Aurora {
     }
 
     if ((this.reduced || this.still) && this.time > 2.5) { this.running = false; return; }
-    this.raf = requestAnimationFrame((t) => this.step(t));
+    this.scheduleNext();
   }
 
   drawPoints(crisp) {
@@ -765,7 +801,11 @@ class Aurora {
   }
 
   start() { if (this.ok && !this.running) { this.running = true; this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.step(t)); } }
-  stop() { this.running = false; if (this.raf) cancelAnimationFrame(this.raf); }
+  stop() {
+    this.running = false;
+    if (this.raf) cancelAnimationFrame(this.raf);
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  }
 }
 
 /* ── static fallback: prerendered lit terrain, slow pan ── */
@@ -789,7 +829,7 @@ function staticFallback(canvas) {
       ctx.fillRect(x, y - elev * 26 * (0.4 + t), s, s);
     }
   }
-  return { setMood() {}, setProvider() {}, setMotion() {}, setFormation() {}, releaseFormation() {}, setLights() {}, pulse() {}, setDim() {}, ok: true, fallback: true };
+  return { setMood() {}, setProvider() {}, setMotion() {}, setIdle() {}, setFormation() {}, releaseFormation() {}, setLights() {}, pulse() {}, setDim() {}, ok: true, fallback: true, rendererName: '' };
 }
 
 let engine = null;
@@ -822,6 +862,8 @@ const aurora = {
   setDim: (v) => engine?.setDim?.(v),
   frameEma: () => engine?.frameEma ?? 0,
   isFallback: () => !!engine?.fallback,
+  setIdle: (on) => engine?.setIdle?.(on),
+  rendererName: () => engine?.rendererName || '',
 };
 
 global.ConsiliumAurora = { initAurora, aurora };

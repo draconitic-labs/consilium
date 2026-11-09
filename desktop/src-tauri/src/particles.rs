@@ -46,12 +46,26 @@ impl GuardState {
 /// What the page needs to decide how to start the field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct ParticleCheck {
+    /// GL will draw in software, so the animated field would keep a CPU core
+    /// busy. WebKitGTK hides the renderer name from the page, so this is
+    /// decided here.
+    pub software_gl: bool,
     /// `CONSILIUM_PARTICLES=0` is set.
     pub env_disabled: bool,
     /// The previous launch began starting the field and never finished.
     pub previous_froze: bool,
     /// Starts in a row that never finished, including the previous one.
     pub consecutive_freezes: u32,
+}
+
+/// Linux: GL draws in software when no GPU device node exists, or when the
+/// user asked Mesa for a software rasterizer.
+pub fn software_gl(env: impl Fn(&str) -> Option<String>, gpu_device_present: bool) -> bool {
+    let forced = env("LIBGL_ALWAYS_SOFTWARE").is_some_and(|value| {
+        value == "1" || value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("yes")
+    }) || env("GALLIUM_DRIVER")
+        .is_some_and(|value| matches!(value.as_str(), "llvmpipe" | "softpipe" | "swrast"));
+    forced || !gpu_device_present
 }
 
 /// `CONSILIUM_PARTICLES=0` turns the WebGL field off for the session.
@@ -61,9 +75,10 @@ pub fn disabled_by_env(value: Option<&OsStr>) -> bool {
 
 /// Run once at page start. A leftover "starting" counts as a freeze and is
 /// cleared, so the launch after this one tries the field again.
-pub fn check(file: &impl StateFile, env_disabled: bool) -> ParticleCheck {
+pub fn check(file: &impl StateFile, env_disabled: bool, software_gl: bool) -> ParticleCheck {
     if env_disabled {
         return ParticleCheck {
+            software_gl,
             env_disabled: true,
             previous_froze: false,
             consecutive_freezes: 0,
@@ -72,6 +87,7 @@ pub fn check(file: &impl StateFile, env_disabled: bool) -> ParticleCheck {
     let state = GuardState::parse(file.read_state().as_deref());
     if !state.starting {
         return ParticleCheck {
+            software_gl,
             env_disabled: false,
             previous_froze: false,
             consecutive_freezes: state.consecutive_freezes,
@@ -88,6 +104,7 @@ pub fn check(file: &impl StateFile, env_disabled: bool) -> ParticleCheck {
         .render(),
     );
     ParticleCheck {
+        software_gl,
         env_disabled: false,
         previous_froze: true,
         consecutive_freezes,
@@ -130,7 +147,7 @@ mod tests {
     }
 
     fn check_now(file: &MemoryFile) -> ParticleCheck {
-        check(file, false)
+        check(file, false, false)
     }
 
     #[test]
@@ -178,11 +195,30 @@ mod tests {
     fn the_environment_switch_skips_webgl_without_touching_state() {
         let file = MemoryFile::default();
         begin(&file).unwrap();
-        let disabled = check(&file, true);
+        let disabled = check(&file, true, false);
         assert!(disabled.env_disabled);
         assert!(!disabled.previous_froze);
         // the pending start is still reported once the switch is removed
         assert!(check_now(&file).previous_froze);
+    }
+
+    #[test]
+    fn software_gl_is_reported_without_a_gpu_or_when_requested() {
+        let none = |_: &str| None;
+        assert!(!software_gl(none, true));
+        assert!(software_gl(none, false));
+        let forced = |key: &str| (key == "LIBGL_ALWAYS_SOFTWARE").then(|| "1".to_string());
+        assert!(software_gl(forced, true));
+        let gallium = |key: &str| (key == "GALLIUM_DRIVER").then(|| "llvmpipe".to_string());
+        assert!(software_gl(gallium, true));
+        let hardware = |key: &str| (key == "GALLIUM_DRIVER").then(|| "radeonsi".to_string());
+        assert!(!software_gl(hardware, true));
+        let off = |key: &str| (key == "LIBGL_ALWAYS_SOFTWARE").then(|| "0".to_string());
+        assert!(!software_gl(off, true));
+        // the check passes the answer through unchanged
+        let file = MemoryFile::default();
+        assert!(check(&file, false, true).software_gl);
+        assert!(!check(&file, false, false).software_gl);
     }
 
     #[test]

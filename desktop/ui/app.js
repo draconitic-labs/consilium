@@ -61,6 +61,9 @@ let implicitDefaultModel = null;
 // On an empty chat the field forms an iris above the title; during a
 // conversation it dims and follows the request (thinking, writing, error).
 const MOTION_KEY = "consilium.motion";
+// Set when the user turns motion on while the GL renderer draws in software.
+const SOFTWARE_MOTION_KEY = "consilium.motion.software";
+let softwareStill = false;
 const fieldWanted = { world: "consilium", mood: "idle", motion: true };
 let fieldScene = null; // "empty" or "conversation"
 let fieldMoodShown = null;
@@ -83,6 +86,14 @@ function readMotionPreference() {
     return localStorage.getItem(MOTION_KEY) !== "off";
   } catch {
     return true;
+  }
+}
+
+function readSoftwareMotionOptIn() {
+  try {
+    return localStorage.getItem(SOFTWARE_MOTION_KEY) === "on";
+  } catch {
+    return false;
   }
 }
 
@@ -119,10 +130,10 @@ async function startParticleField() {
       "The particle field froze twice in a row while starting, so it is now off. Turn it back on in Setup & About."
     );
   }
-  await createField($("field"), decision.webgl);
+  await createField($("field"), decision.webgl, check.software_gl === true);
 }
 
-async function createField(canvas, webgl) {
+async function createField(canvas, webgl, softwareGl = false) {
   if (webgl) {
     try {
       await invoke("particle_field_begin");
@@ -134,7 +145,20 @@ async function createField(canvas, webgl) {
     webgl,
     onStarted: () => invoke("particle_field_finish").catch(() => {}),
   });
-  window.ConsiliumField = window.ConsiliumAurora.aurora;
+  const aurora = window.ConsiliumAurora.aurora;
+  // Without a GPU the animation keeps a CPU core busy: start as a still
+  // image unless the user has turned motion on for this computer.
+  // WebKitGTK masks the renderer name, so Linux reports software GL from the
+  // backend; WebView2 on Windows gives the page the real name.
+  softwareStill =
+    webgl &&
+    (softwareGl || fieldState.isSoftwareRenderer(aurora.rendererName())) &&
+    !readSoftwareMotionOptIn();
+  if (softwareStill) {
+    aurora.setMotion(false);
+    $("motion-toggle").checked = false;
+  }
+  window.ConsiliumField = aurora;
   document.dispatchEvent(new Event("consilium-field-ready"));
 }
 
@@ -169,6 +193,7 @@ function syncField(reform = false) {
   fieldMoodShown = mood;
   f.setDim(scene === "empty" ? 0 : 0.45);
   f.setMood(mood);
+  f.setIdle(fieldState.isIdleMood(mood));
   if (changed && mood === "iris") f.setFormation("ring", irisAboveTitle(), 0.9);
 }
 
@@ -194,6 +219,15 @@ function flashFieldError() {
   }, 2500);
 }
 
+// Undoes the switch animation without waiting, for when it could not run.
+function clearProviderCeremony() {
+  fieldSwitching = false;
+  document.body.classList.remove("switching");
+  $("switch-veil").classList.remove("on");
+  setFieldWorld(activeProvider);
+  syncField(true);
+}
+
 function beginProviderCeremony(provider) {
   const started = performance.now();
   fieldSwitching = true;
@@ -205,6 +239,7 @@ function beginProviderCeremony(provider) {
   if (f) {
     f.setProvider("consilium");
     f.setMood("calibrating");
+    f.setIdle(false);
     f.setDim(0.35);
     const c = $("field").getBoundingClientRect();
     f.setFormation("ring", { cx: 0, cy: 0, r0: 0.22, r1: 0.36, sx: c.width ? c.height / c.width : 1 }, 0.9);
@@ -225,7 +260,7 @@ async function bootField() {
   await fieldReady();
   const f = field();
   if (!f) return;
-  fieldWanted.motion = readMotionPreference();
+  fieldWanted.motion = readMotionPreference() && !softwareStill;
   f.setMotion(fieldWanted.motion);
   f.setProvider(fieldWanted.world);
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -238,6 +273,7 @@ async function bootField() {
     }
     const iris = irisAboveTitle();
     f.setMood("calibrating");
+    f.setIdle(false);
     f.setFormation(
       "text",
       { text: "CONSILIUM", fontPx: 150, cx: iris.cx || 0, cy: iris.cy || 0.3, width: 1.05 },
@@ -1623,8 +1659,9 @@ providerSelect.addEventListener("change", async () => {
   }
   transitioning = true;
   setControlsBusy(true);
-  const endProviderCeremony = beginProviderCeremony(provider);
+  let endProviderCeremony = null;
   try {
+    endProviderCeremony = beginProviderCeremony(provider);
     await invoke("set_provider", { providerId: provider.id });
     await invoke("new_session");
     activeProvider = provider.id;
@@ -1644,7 +1681,13 @@ providerSelect.addEventListener("change", async () => {
     providerSelect.value = activeProvider;
     addInfo(`Cannot switch provider: ${e}`);
   } finally {
-    await endProviderCeremony(activeProvider);
+    try {
+      if (endProviderCeremony) await endProviderCeremony(activeProvider);
+      else clearProviderCeremony();
+    } catch (error) {
+      console.error("provider switch animation", error);
+      clearProviderCeremony();
+    }
     transitioning = false;
     setControlsBusy(busy);
   }
@@ -1826,6 +1869,15 @@ $("motion-toggle").checked = readMotionPreference();
 $("motion-toggle").addEventListener("change", async () => {
   const on = $("motion-toggle").checked;
   writeMotionPreference(on);
+  if (on && softwareStill) {
+    // an explicit choice to animate even though rendering is in software
+    try {
+      localStorage.setItem(SOFTWARE_MOTION_KEY, "on");
+    } catch {
+      // applies to this window only
+    }
+    softwareStill = false;
+  }
   fieldWanted.motion = on;
   if (on && field()?.isFallback()) {
     // the still image was drawn on a 2D canvas; WebGL needs a fresh one

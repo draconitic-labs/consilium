@@ -421,8 +421,11 @@ inspection, and release checklist.
 - The search box above **Recent** filters conversations by title. Each
   conversation is marked with the colour of the provider that answered it.
 - **Setup & About** has an **Animated particle field** setting; when it is off,
-  a still image is shown and WebGL is not used. The system reduced-motion
-  setting is always honored.
+  a still image is shown and WebGL is not used. Without a GPU (software GL
+  such as llvmpipe) the field starts as a still image unless you turn the
+  setting on. While nothing is happening the field drops to 15 frames a
+  second, and it pauses while the window is in the background. The system
+  reduced-motion setting is always honored.
 - `CONSILIUM_PARTICLES=0` starts without the WebGL field; if the field ever
   freezes while starting, the next launch shows the still image, and two
   freezes in a row turn the setting off.
