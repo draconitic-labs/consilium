@@ -1803,9 +1803,11 @@ fn initial_route() -> (String, String, HashMap<String, Backend>, Option<String>)
     (provider, profile, backends, config_error)
 }
 
-/// On the NVIDIA driver, WebKitGTK's default DMA-BUF renderer gives a blank
-/// window under X11 and a slower one under Wayland; shared-memory buffers fix
-/// both. A choice the user already made in either variable is kept.
+/// On the NVIDIA driver, WebKitGTK's DMA-BUF renderer gives a blank window under
+/// X11, and creating a WebGL context with it can hang inside NVIDIA's EGL (8 of
+/// 70 Wayland launches froze with shared-memory DMA-BUF buffers, 0 of 70 with
+/// the DMA-BUF renderer off). Turning that renderer off avoids both. A choice
+/// the user already made in either variable is kept.
 #[cfg(target_os = "linux")]
 fn webkit_env_for_nvidia(
     nvidia_driver: bool,
@@ -1817,7 +1819,7 @@ fn webkit_env_for_nvidia(
     {
         return None;
     }
-    Some(("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1"))
+    Some(("WEBKIT_DISABLE_DMABUF_RENDERER", "1"))
 }
 
 fn main() {
@@ -1919,11 +1921,11 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
-    fn nvidia_driver_gets_shared_memory_webkit_buffers_unless_the_user_chose() {
+    fn nvidia_driver_turns_off_the_dmabuf_renderer_unless_the_user_chose() {
         let none_set = |_: &str| false;
         assert_eq!(
             webkit_env_for_nvidia(true, none_set),
-            Some(("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1"))
+            Some(("WEBKIT_DISABLE_DMABUF_RENDERER", "1"))
         );
         assert_eq!(webkit_env_for_nvidia(false, none_set), None);
         for chosen in [

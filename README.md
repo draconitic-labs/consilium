@@ -427,8 +427,8 @@ inspection, and release checklist.
   freezes while starting, the next launch shows the still image, and two
   freezes in a row turn the setting off.
 - On Linux with the NVIDIA driver, Consilium sets
-  `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` for WebKitGTK unless you have set it or
-  `WEBKIT_DISABLE_DMABUF_RENDERER` yourself.
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` for WebKitGTK unless you have set it or
+  `WEBKIT_DMABUF_RENDERER_FORCE_SHM` yourself.
 - Images can be pasted, dropped, or selected. Text files are transiently
   inlined into that request; provider image support depends on the selected
   adapter. Durable history stores attachment metadata, not file contents.

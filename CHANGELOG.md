@@ -11,7 +11,7 @@
 - Setup & About has an "Animated particle field" setting; when it is off, a still image is shown and WebGL is not used. The system reduced-motion setting is always honored.
 - If creating the particle field's WebGL context freezes (seen inside some GL drivers), the next launch shows the still image instead, and two freezes in a row turn the setting off. `CONSILIUM_PARTICLES=0` starts without WebGL.
 - The Codex model list comes from the installed Codex CLI's catalog (`codex debug models`), with each model's reasoning levels.
-- On Linux with the NVIDIA driver, WebKitGTK uses shared-memory buffers (`WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`) unless you have chosen otherwise.
+- On Linux with the NVIDIA driver, WebKitGTK's DMA-BUF renderer is turned off (`WEBKIT_DISABLE_DMABUF_RENDERER=1`) unless you have chosen otherwise; with it on, creating the particle field's WebGL context could freeze inside NVIDIA's EGL.
 - The application ID, data folders and session format are unchanged.
 
 ## 0.1.1 — 2026-11-08
