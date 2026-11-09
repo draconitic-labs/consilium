@@ -1,11 +1,14 @@
 # Consilium distribution plan
 
-Consilium uses the Flintglade name and dragon mark for distribution. The
-stable application ID is `com.flintglade.consilium`; changing it later would
-break desktop identity and require a new Flathub submission.
+Consilium is published by Draconitic Labs. Its stable application ID,
+`com.flintglade.consilium`, and its Windows `Flintglade\Consilium` data
+folders keep the name of the first releases; changing them would break
+desktop identity, existing installs and the AppImageHub listing, and would
+require a new Flathub submission.
 
 Consilium itself is free and open source under Apache-2.0. Release packages
-link to [Flintglade](https://flintglade.com/), source and issues live in the
+link to the [project page](https://ai.draconitic.com/consilium), source and
+issues live in the
 [canonical repository](https://github.com/draconitic-labs/consilium), and optional
 project support is available through
 [Patreon](https://www.patreon.com/c/zach457). Third-party providers may charge
@@ -28,8 +31,9 @@ Every Linux package includes the repository `LICENSE`: the deb installs it as
 generated `THIRD_PARTY_NOTICES.txt`; the local Flatpak installs it beside its
 project license. The portable ZIP contains both `LICENSE.txt` and
 `THIRD_PARTY_NOTICES.txt`. Linux package metadata records
-`Flintglade <support@flintglade.com>` as the deb Maintainer and
-`https://flintglade.com/` as the deb Homepage and RPM URL.
+`Draconitic Labs <support@draconitic.com>` as the deb Maintainer and
+`https://ai.draconitic.com/consilium` as the deb Homepage and RPM URL. The
+Windows installers record `Draconitic Labs` as publisher and MSI manufacturer.
 
 The notice inventory comes from `cargo metadata --locked` and records each
 third-party package's name, version, declared license expression, precise
@@ -142,7 +146,7 @@ listing is accepted; it does not take over release hosting.
 
 `packaging/flatpak/com.flintglade.consilium.local.yml` is a real local Flatpak
 recipe. It builds from the working tree with an offline Cargo source manifest,
-installs the Flintglade icons, desktop entry, AppStream metadata, and Apache
+installs the Consilium icons, desktop entry, AppStream metadata, and Apache
 license, and grants only display, IPC, and network access. No home-directory
 permission is present. The Flatpak can use local OpenAI-compatible endpoints
 and direct APIs; host-installed provider CLIs are outside the sandbox.

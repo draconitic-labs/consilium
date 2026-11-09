@@ -9,7 +9,7 @@ on:
       tag:
         description: Existing draft release tag to verify
         required: true
-        default: v0.1.0
+        default: v0.1.1
         type: string
       reuse_existing_assets:
         description: Verify the existing draft assets without rebuilding bundles
@@ -92,11 +92,15 @@ jobs:
           tagName: ${{ env.RELEASE_TAG }}
           releaseName: Consilium ${{ env.RELEASE_TAG }}
           releaseBody: |
-            Flintglade Consilium desktop bundles for Windows and Linux.
+            Consilium desktop packages for Windows and Linux x86_64, published by Draconitic Labs. Consilium is a free and open-source multi-provider AI harness under Apache-2.0.
 
-            Consilium is free and open source under Apache-2.0. Optional support: https://www.patreon.com/c/zach457
+            Project page: https://ai.draconitic.com/consilium
 
-            This release remains a draft until the owner verifies both clean-machine installs and records the Windows signing status. No updater feed is published.
+            Linux: AppImage, `.deb` and `.rpm`, built on Ubuntu 22.04.
+
+            Windows: the NSIS setup `.exe` and the MSI download and install WebView2 if it is missing; the portable ZIP needs WebView2 already installed. The Windows installers and executables are not code-signed, so Windows may show an unknown-publisher or SmartScreen warning. Compare each download with `SHA256SUMS` before running it.
+
+            Consilium does not update itself; new versions are published on this page. Optional support: https://www.patreon.com/c/zach457
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: false
@@ -128,10 +132,11 @@ jobs:
           @"
           Consilium portable for Windows
 
-          This is Flintglade's free and open-source Consilium desktop executable,
-          provided under Apache-2.0. LICENSE.txt contains the complete project license,
-          and THIRD_PARTY_NOTICES.txt records the locked Rust dependency inventory plus
-          its release-target license and attribution texts. This package does not
+          This is the free and open-source Consilium desktop executable from
+          Draconitic Labs, provided under Apache-2.0. LICENSE.txt contains the
+          complete project license, and THIRD_PARTY_NOTICES.txt records the locked
+          Rust dependency inventory plus its release-target license and attribution
+          texts. This package does not
           install shortcuts or uninstallation metadata and does not
           include a WebView2 bootstrapper. Install Microsoft's current WebView2 Runtime
           first if Windows does not already provide it.
@@ -141,7 +146,7 @@ jobs:
           %LOCALAPPDATA%\Flintglade\Consilium\sessions.json. GROK_CHAT_DATA_DIR can
           override that location. Never put API keys in this ZIP.
 
-          Project home: https://flintglade.com/
+          Project home: https://ai.draconitic.com/consilium
           Optional support: https://www.patreon.com/c/zach457
           "@ | Set-Content -Encoding utf8 (Join-Path $portableRoot "README.txt")
           Compress-Archive -Path (Join-Path $portableRoot "*") -DestinationPath $archive

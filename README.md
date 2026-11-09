@@ -7,9 +7,14 @@
 Consilium is a free and open-source multi-provider AI harness. Its desktop app
 routes among local models, provider CLIs, and direct APIs; a focused terminal
 interface supports Grok CLI and the optional xAI API through the shared Rust
-streaming backend. It is a
-[Draconitic Labs](https://draconitic.com/) project, developed in public at
+streaming backend. Consilium is published by
+[Draconitic Labs](https://draconitic.com/), with its project page at
+[ai.draconitic.com/consilium](https://ai.draconitic.com/consilium), and
+developed in public at
 [github.com/draconitic-labs/consilium](https://github.com/draconitic-labs/consilium).
+Earlier releases carried the Flintglade name. The application ID
+`com.flintglade.consilium` and the Windows `Flintglade\Consilium` data folders
+keep that name, so existing installs and the AppImageHub listing keep working.
 
 Every Consilium feature is available in this repository under the
 [Apache License 2.0](LICENSE). There are no paid Consilium tiers, feature
@@ -38,15 +43,25 @@ the complete application without them by running a compatible model locally.
 
 ## Downloads
 
-The release workflow produces native packages on Windows and Linux. A release
-stays in draft until its installers have been exercised on clean machines and
-the downloadable files have passed the repository's package inspection step.
+Download Consilium 0.1.1 from its
+[GitHub release](https://github.com/draconitic-labs/consilium/releases/tag/v0.1.1):
 
-| Platform | Release downloads | Notes |
+| Platform | File | Notes |
 | --- | --- | --- |
-| Windows x86_64 | NSIS setup `.exe`, MSI, portable ZIP | Includes the locked Rust dependency notices; the installers can bootstrap WebView2, while the portable build requires WebView2 to be present already |
-| Linux x86_64 | AppImage, `.deb`, `.rpm` | Direct downloads built on Ubuntu 22.04; each package includes the Apache-2.0 license and locked Rust dependency notices |
+| Windows x86_64 | `Consilium_0.1.1_x64-setup.exe` | NSIS installer for the current user; downloads WebView2 if it is missing |
+| Windows x86_64 | `Consilium_0.1.1_x64_en-US.msi` | MSI installer for all users; downloads WebView2 if it is missing |
+| Windows x86_64 | `Consilium_0.1.1_windows_x86_64_portable.zip` | `Consilium.exe` without an installer; needs WebView2 already installed |
+| Linux x86_64 | `consilium-0.1.1-x86_64.AppImage` | Also listed on [AppImageHub](https://appimage.github.io/Consilium/) |
+| Linux x86_64 | `Consilium_0.1.1_amd64.deb` | Debian package |
+| Linux x86_64 | `Consilium-0.1.1-1.x86_64.rpm` | RPM package |
 | Linux from source | Local Flatpak recipe | Supports local compatible endpoints and direct APIs; host provider CLIs are outside its sandbox |
+
+Every package carries the locked Rust dependency notices and the Apache-2.0
+license; the Windows installers show the license during setup. The Linux
+packages are built on Ubuntu 22.04. Compare each download
+with the release's `SHA256SUMS` file. The Windows installers and executables
+are not code-signed, so Windows may show an unknown-publisher or SmartScreen
+warning.
 
 The AppImageHub catalog submission was [accepted](https://github.com/AppImage/appimage.github.io/pull/3790) on September 26, 2026; release files remain hosted on GitHub. A Snap needs its own tested
 recipe and Store review, with the supported provider routes determined by its
