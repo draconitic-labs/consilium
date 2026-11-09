@@ -562,46 +562,6 @@ mod tests {
     }
 
     #[test]
-    fn listing_reports_each_session_provider_without_changing_the_file() {
-        let (store, dir) = store_in_temp();
-        let mut with_provider = sample("a", "routed");
-        with_provider.runtime = Some(StoredRuntime {
-            provider: Some("codex".to_string()),
-            agent: false,
-            model: None,
-            effort: None,
-            routing_profile: None,
-        });
-        store
-            .save(with_provider)
-            .expect("save session with runtime");
-        store
-            .save(sample("b", "no runtime"))
-            .expect("save session without runtime");
-
-        let metas = store.list().expect("list sessions");
-        let provider_of = |id: &str| {
-            metas
-                .iter()
-                .find(|meta| meta.id == id)
-                .map(|meta| meta.provider.clone())
-                .expect("listed session")
-        };
-        assert_eq!(provider_of("a"), Some("codex".to_string()));
-        assert_eq!(provider_of("b"), None);
-
-        let raw = std::fs::read_to_string(dir.join("sessions.json")).expect("read store");
-        let stored: serde_json::Value = serde_json::from_str(&raw).expect("parse store");
-        for session in stored.as_array().expect("session array") {
-            assert!(
-                session.get("provider").is_none(),
-                "file gained a provider field"
-            );
-        }
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
     fn explicit_data_directory_overrides_every_platform_default() {
         let path = resolved_for(
             true,
@@ -651,13 +611,26 @@ mod tests {
 
         store.save(sample("a", "first chat")).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(5));
-        store.save(sample("b", "second chat")).unwrap();
+        let mut routed = sample("b", "second chat");
+        routed.runtime = Some(StoredRuntime {
+            provider: Some("codex".to_string()),
+            agent: true,
+            model: None,
+            effort: None,
+            routing_profile: None,
+        });
+        store.save(routed).unwrap();
 
-        // newest first
+        // newest first, each with the provider recorded in its runtime
         let list = store.list().unwrap();
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].id, "b");
         assert_eq!(list[1].id, "a");
+        assert_eq!(list[0].provider.as_deref(), Some("codex"));
+        assert_eq!(list[1].provider, None);
+        // the listed provider is derived; the stored session format is unchanged
+        let stored = serde_json::to_value(store.load("b").unwrap()).unwrap();
+        assert!(stored.get("provider").is_none());
 
         // load returns full transcript and grok session for resume
         let loaded = store.load("a").unwrap();

@@ -3,14 +3,15 @@
 // rainbow noise. Each mood defines flow structure, energy, trail
 // persistence and a 3-stop palette; a provider world tints the whole state
 // without erasing the mood's meaning.
-
+(function (global) {
+"use strict";
 const hx = (s) => [parseInt(s.slice(1, 3), 16) / 255, parseInt(s.slice(3, 5), 16) / 255, parseInt(s.slice(5, 7), 16) / 255];
 
 /* Consilium's own identity stays violet; providers are data-driven accents,
    grouped by vendor (see field-state.js). `tint`/`gain` wash the particles;
    `accent`/`mix` re-key the mood palette so mid and high stops carry the
    provider. */
-export const PROVIDER_WORLDS = {
+const PROVIDER_WORLDS = {
   consilium: { tint: hx('#8b7cf6'), gain: 0.0,  accent: hx('#8b7cf6'), mix: 0.22 },
   codex:     { tint: hx('#5adbe8'), gain: 0.55, accent: hx('#49d6e6'), mix: 0.58 },
   claude:    { tint: hx('#e8a55a'), gain: 0.55, accent: hx('#f0a852'), mix: 0.58 },
@@ -19,7 +20,7 @@ export const PROVIDER_WORLDS = {
   local:     { tint: hx('#8affc9'), gain: 0.45, accent: hx('#7cf2bd'), mix: 0.5 },
 };
 
-export const MOODS = {
+const MOODS = {
   idle: {
     c0: hx('#2a2f38'), c1: hx('#8a95a3'), c2: hx('#f2f6fb'),
     drift: 1, swirl: 0, stream: 0, formationPull: 0.55,
@@ -74,6 +75,9 @@ export const MOODS = {
 };
 
 /* Spectral LUT stops for iridescent glints (thin-film order). */
-export const SPECTRAL = [
+const SPECTRAL = [
   hx('#7fd8ff'), hx('#9a8cf9'), hx('#ff7ad9'), hx('#ffd27f'), hx('#8affc9'),
 ];
+
+global.ConsiliumAuroraMoods = { MOODS, PROVIDER_WORLDS, SPECTRAL };
+})(this);

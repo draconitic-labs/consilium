@@ -2,7 +2,8 @@
 // Each generator returns { targets: Float32Array(n*2) in clip space,
 // classes: Float32Array(n) } where class ∈ [0,1] feeds hue/brightness
 // grouping in the shaders (sector identity, elevation, glyph membership…).
-
+(function (global) {
+"use strict";
 const TAU = Math.PI * 2;
 
 function alloc(n) {
@@ -10,7 +11,7 @@ function alloc(n) {
 }
 
 /* Free drift — targets unused (weight 0), but keep a scatter for morph-outs. */
-export function scatter(n) {
+function scatter(n) {
   const f = alloc(n);
   for (let i = 0; i < n; i++) {
     f.targets[i * 2] = Math.random() * 2.4 - 1.2;
@@ -22,7 +23,7 @@ export function scatter(n) {
 
 /* Lit dot-terrain (GEO_NOISE law): rows recede upward with perspective,
    elevation = layered sine noise; class = normalized elevation (crest light). */
-export function terrain(n, { rows = 90, horizon = 0.15, drop = 0.85 } = {}) {
+function terrain(n, { rows = 90, horizon = 0.15, drop = 0.85 } = {}) {
   const f = alloc(n);
   const perRow = Math.max(8, Math.floor(n / rows));
   let i = 0;
@@ -48,7 +49,7 @@ export function terrain(n, { rows = 90, horizon = 0.15, drop = 0.85 } = {}) {
 }
 
 /* Ring / iris with hue-by-angle sectors and a calm dark core. */
-export function ring(n, { cx = 0, cy = 0.02, r0 = 0.34, r1 = 0.5, sectors = 1, sx = 1 } = {}) {
+function ring(n, { cx = 0, cy = 0.02, r0 = 0.34, r1 = 0.5, sectors = 1, sx = 1 } = {}) {
   const f = alloc(n);
   for (let i = 0; i < n; i++) {
     const a = Math.random() * TAU;
@@ -62,7 +63,7 @@ export function ring(n, { cx = 0, cy = 0.02, r0 = 0.34, r1 = 0.5, sectors = 1, s
 }
 
 /* Sphere shell (dandelion / GEO_CIRC): denser at rim via projection. */
-export function sphere(n, { cx = 0, cy = 0, r = 0.46 } = {}) {
+function sphere(n, { cx = 0, cy = 0, r = 0.46 } = {}) {
   const f = alloc(n);
   for (let i = 0; i < n; i++) {
     const u = Math.random() * 2 - 1;               // cosθ uniform on sphere
@@ -78,7 +79,7 @@ export function sphere(n, { cx = 0, cy = 0, r = 0.46 } = {}) {
 }
 
 /* Vertical fiber curtain (Data Flow walls): columns with flow jitter. */
-export function curtain(n, { x0 = -0.9, x1 = 0.9, top = 0.75, bottom = -0.75, cols = 46 } = {}) {
+function curtain(n, { x0 = -0.9, x1 = 0.9, top = 0.75, bottom = -0.75, cols = 46 } = {}) {
   const f = alloc(n);
   for (let i = 0; i < n; i++) {
     const c = Math.floor(Math.random() * cols);
@@ -93,7 +94,7 @@ export function curtain(n, { x0 = -0.9, x1 = 0.9, top = 0.75, bottom = -0.75, co
 }
 
 /* Hourglass waist (Data Strings pinch) — continuity iconography. */
-export function waist(n, { cx = 0, cy = 0, spread = 0.85, height = 0.62 } = {}) {
+function waist(n, { cx = 0, cy = 0, spread = 0.85, height = 0.62 } = {}) {
   const f = alloc(n);
   for (let i = 0; i < n; i++) {
     const side = Math.random() < 0.5 ? -1 : 1;
@@ -109,7 +110,7 @@ export function waist(n, { cx = 0, cy = 0, spread = 0.85, height = 0.62 } = {}) 
 }
 
 /* Text mask: rasterize glyphs offscreen, emit targets on ink pixels. */
-export function textMask(n, text, { fontPx = 160, font = '700 {px}px "Space Grotesk", sans-serif', cx = 0, cy = 0, width = 1.5 } = {}) {
+function textMask(n, text, { fontPx = 160, font = '700 {px}px "Space Grotesk", sans-serif', cx = 0, cy = 0, width = 1.5 } = {}) {
   const cnv = document.createElement('canvas');
   const ctx = cnv.getContext('2d', { willReadFrequently: true });
   cnv.width = 900; cnv.height = 260;
@@ -139,4 +140,7 @@ export function textMask(n, text, { fontPx = 160, font = '700 {px}px "Space Grot
   return f;
 }
 
-export const FORMATIONS = { scatter, terrain, ring, sphere, curtain, waist };
+const FORMATIONS = { scatter, terrain, ring, sphere, curtain, waist };
+
+global.ConsiliumAuroraFormations = { FORMATIONS, textMask, scatter, ring, terrain, curtain, sphere, waist };
+})(this);

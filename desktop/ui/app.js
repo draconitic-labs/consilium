@@ -56,8 +56,8 @@ let modelSupportsEffort = false;
 let implicitDefaultModel = null;
 
 /* ------- particle field ------- */
-// aurora/field.js is a module and may finish loading after this script, so
-// the wanted field state lives here and is applied once the field is ready.
+// The aurora scripts load after this one, so the wanted field state lives
+// here and is applied once the field is ready.
 // On an empty chat the field forms an iris above the title; during a
 // conversation it dims and follows the request (thinking, writing, error).
 const MOTION_KEY = "consilium.motion";
@@ -1975,8 +1975,15 @@ async function boot() {
 }
 
 bootField().catch((error) => console.error("particle field", error));
-boot().catch((error) => {
-  $("setup-error").textContent = `Consilium could not finish starting: ${String(error)}`;
-  $("setup-screen").hidden = false;
-  setState("startup failed", false);
-});
+boot()
+  .catch((error) => {
+    $("setup-error").textContent = `Consilium could not finish starting: ${String(error)}`;
+    $("setup-screen").hidden = false;
+    setState("startup failed", false);
+  })
+  .finally(() => {
+    // The particle field starts only after the first load, so its WebGL setup
+    // never competes with the startup calls (aurora/field.js waits for this).
+    window.ConsiliumUiReady = true;
+    document.dispatchEvent(new Event("consilium-ui-ready"));
+  });

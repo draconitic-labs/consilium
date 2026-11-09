@@ -5,9 +5,10 @@
 //
 // Noise chunks adapted from Ashima Arts / Ian McEwan webgl-noise (MIT);
 // see THIRD_PARTY_NOTICES.txt.
-
-import { MOODS, PROVIDER_WORLDS, SPECTRAL } from './moods.js';
-import { FORMATIONS, textMask, scatter } from './formations.js';
+(function (global) {
+"use strict";
+const { MOODS, PROVIDER_WORLDS, SPECTRAL } = global.ConsiliumAuroraMoods;
+const { FORMATIONS, textMask, scatter } = global.ConsiliumAuroraFormations;
 
 /* hue rotation (Rec. 601 luma axis) — the palette breathes without leaving
    its family; shadows stay anchored so the silver-base law holds */
@@ -781,7 +782,7 @@ function staticFallback(canvas) {
 }
 
 let engine = null;
-export function initAurora(canvas) {
+function initAurora(canvas) {
   try {
     engine = new Aurora(canvas);
     if (!engine.ok) engine = staticFallback(canvas);
@@ -791,7 +792,7 @@ export function initAurora(canvas) {
   }
   return engine;
 }
-export const aurora = {
+const aurora = {
   setMood: (m) => engine?.setMood?.(m),
   setProvider: (p) => engine?.setProvider?.(p),
   setMotion: (on) => engine?.setMotion?.(on),
@@ -802,3 +803,6 @@ export const aurora = {
   setDim: (v) => engine?.setDim?.(v),
   frameEma: () => engine?.frameEma ?? 0,
 };
+
+global.ConsiliumAurora = { initAurora, aurora };
+})(this);

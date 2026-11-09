@@ -483,12 +483,14 @@ body.switching #transcript .msg {
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  padding: clamp(150px, 42vh, 380px) 0 4vh;
+  padding: 0 0 3vh;
   gap: 12px;
   text-align: center;
   color: #d4d8e3;
 }
 #empty-state[hidden] { display: none; }
+/* the free space above the title, where the iris forms */
+#empty-state::before { content: ""; flex: 1 1 auto; min-height: 140px; }
 #empty-state > * {
   background: #000;
   box-shadow: 0 0 22px 14px #000;
