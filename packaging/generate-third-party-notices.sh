@@ -8,6 +8,7 @@ mode="${1:-generate}"
 notices="THIRD_PARTY_NOTICES.txt"
 fallbacks="packaging/license-fallbacks.json"
 supplements="packaging/attribution-supplements.json"
+bundled_assets="packaging/bundled-assets.json"
 release_targets=(
   x86_64-unknown-linux-gnu
   x86_64-pc-windows-msvc
@@ -29,6 +30,7 @@ done
 [[ -s Cargo.lock ]] || fail "Cargo.lock is missing or empty"
 [[ -s "$fallbacks" ]] || fail "$fallbacks is missing or empty"
 [[ -s "$supplements" ]] || fail "$supplements is missing or empty"
+[[ -s "$bundled_assets" ]] || fail "$bundled_assets is missing or empty"
 
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
@@ -437,14 +439,48 @@ if ! cmp --silent \
 fi
 
 material_count="$(wc -l <"$materials")"
+# Bundled desktop assets (fonts and adapted shader code) are not Cargo
+# packages. Every listed file and license material must match its reviewed
+# hash, and every font shipped in desktop/ui/fonts must be listed.
+jq -e '
+  .schema == 1 and
+  (.entries | type == "array" and length > 0) and
+  all(.entries[];
+    (.name | type == "string" and length > 0 and (test("[[:cntrl:]]") | not)) and
+    (.version | type == "string" and length > 0 and (test("[[:cntrl:]]") | not)) and
+    (.license | type == "string" and length > 0 and (test("[[:cntrl:]]") | not)) and
+    (.source | type == "string" and test("^https://")) and
+    (.files | type == "array") and
+    all(.files[]; (.path | type == "string" and length > 0) and (.sha256 | test("^[0-9a-f]{64}$"))) and
+    (.materials | type == "array" and length > 0) and
+    all(.materials[];
+      (.path | type == "string" and length > 0) and
+      (.origin | type == "string" and length > 0 and (test("[[:cntrl:]]") | not)) and
+      (.sha256 | test("^[0-9a-f]{64}$")))
+  )
+' "$bundled_assets" >/dev/null || fail "$bundled_assets has invalid structure"
+while IFS=$'\t' read -r path expected_hash; do
+  [[ "$path" != /* && "$path" != *'..'* ]] || fail "bundled asset path is invalid: $path"
+  [[ -f "$path" ]] || fail "bundled asset is missing: $path"
+  actual_hash="$(sha256sum "$path" | awk '{print $1}')"
+  [[ "$actual_hash" == "$expected_hash" ]] ||
+    fail "bundled asset $path has SHA-256 $actual_hash, expected $expected_hash"
+done < <(jq -r '.entries[] | (.files[], .materials[]) | [.path, .sha256] | @tsv' "$bundled_assets")
+comm -23 \
+  <(find desktop/ui/fonts -maxdepth 1 -type f -name '*.woff2' | sort) \
+  <(jq -r '.entries[].files[].path' "$bundled_assets" | sort) >"$work_dir/unlisted-assets"
+if [[ -s "$work_dir/unlisted-assets" ]]; then
+  fail "fonts without a bundled-asset notice entry: $(tr '\n' ' ' <"$work_dir/unlisted-assets")"
+fi
+bundled_count="$(jq '.entries | length' "$bundled_assets")"
 fallback_count="$(wc -l <"$missing_keys")"
 supplement_count="$(wc -l <"$attribution_needed_keys")"
 lock_hash="$(sha256sum Cargo.lock | awk '{print $1}')"
 
 {
   printf '%s\n' \
-    'Consilium third-party Rust dependency notices' \
-    '================================================' \
+    'Consilium third-party notices' \
+    '=============================' \
     '' \
     'This deterministic inventory is generated from the complete dependency' \
     'graph resolved by the repository Cargo.lock. License expressions, package' \
@@ -460,6 +496,10 @@ lock_hash="$(sha256sum Cargo.lock | awk '{print $1}')"
     'Generation stops on missing or changed metadata, files, hashes, coverage,' \
     'or UTF-8 text.' \
     '' \
+    'The third section covers assets bundled into the desktop interface that' \
+    'are not Cargo packages: fonts and adapted shader code, listed with their' \
+    'reviewed hashes in packaging/bundled-assets.json.' \
+    '' \
     'This generated file records upstream terms and notices; it does not replace' \
     'the upstream license terms or make a legal conclusion about them.' \
     '' \
@@ -469,6 +509,7 @@ lock_hash="$(sha256sum Cargo.lock | awk '{print $1}')"
     "Included release-target materials: $material_count files" \
     "Checksum-pinned fallback packages: $fallback_count" \
     "Reviewed attribution supplement packages: $supplement_count" \
+    "Bundled desktop assets: $bundled_count" \
     "Release targets: ${release_targets[*]}" \
     'Regenerate: packaging/generate-third-party-notices.sh' \
     'Verify:     packaging/generate-third-party-notices.sh --check' \
@@ -521,6 +562,28 @@ lock_hash="$(sha256sum Cargo.lock | awk '{print $1}')"
       printf '%s\n' '----- END UPSTREAM MATERIAL -----'
     done < <(awk -F '\t' -v key="$key" '$1 == key' "$materials")
   done <"$release_packages"
+  printf '%s\n' \
+    '' \
+    '' \
+    'BUNDLED DESKTOP ASSETS' \
+    '======================'
+  while IFS=$'\x1f' read -r index name version license source source_hash used_by; do
+    printf '\nAsset: %s %s\nDeclared license: %s\nSource: %s\n' \
+      "$name" "$version" "$license" "$source"
+    [[ -z "$source_hash" ]] || printf 'Source archive SHA-256: %s\n' "$source_hash"
+    [[ -z "$used_by" ]] || printf 'Used by: %s\n' "$used_by"
+    while IFS=$'\t' read -r path hash; do
+      printf 'File: %s\nSHA-256: %s\n' "$path" "$hash"
+    done < <(jq -r --argjson i "$index" '.entries[$i].files[] | [.path, .sha256] | @tsv' "$bundled_assets")
+    while IFS=$'\t' read -r path origin hash; do
+      printf '\nMaterial: %s\nMaterial origin: %s\nSHA-256: %s\n' "$path" "$origin" "$hash"
+      printf '%s\n' '----- BEGIN UPSTREAM MATERIAL -----'
+      cat "$path"
+      last_byte="$(tail -c 1 "$path" | od -An -t u1 | tr -d ' ')"
+      [[ "$last_byte" == 10 ]] || printf '\n'
+      printf '%s\n' '----- END UPSTREAM MATERIAL -----'
+    done < <(jq -r --argjson i "$index" '.entries[$i].materials[] | [.path, .origin, .sha256] | @tsv' "$bundled_assets")
+  done < <(jq -r '.entries | to_entries[] | [(.key | tostring), .value.name, .value.version, .value.license, .value.source, (.value.source_sha256 // ""), (.value.used_by // "")] | join("\u001f")' "$bundled_assets")
 } >"$generated"
 
 [[ -s "$generated" ]] || fail "generated notice file is empty"

@@ -1469,7 +1469,7 @@ dependencies = [
 
 [[package]]
 name = "grok-chat"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "color-eyre",
  "crossterm",
@@ -1484,7 +1484,7 @@ dependencies = [
 
 [[package]]
 name = "grok-chat-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "color-eyre",
  "dotenvy",
@@ -1500,7 +1500,7 @@ dependencies = [
 
 [[package]]
 name = "grok-chat-desktop"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "grok-chat-core",
  "serde",

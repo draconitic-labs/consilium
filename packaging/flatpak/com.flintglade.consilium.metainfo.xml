@@ -24,14 +24,19 @@
   <url type="donation">https://www.patreon.com/c/zach457</url>
   <content_rating type="oars-1.1" />
   <branding>
-    <color type="primary" scheme_preference="light">#ff1745</color>
-    <color type="primary" scheme_preference="dark">#ff1745</color>
+    <color type="primary" scheme_preference="light">#8f7ff8</color>
+    <color type="primary" scheme_preference="dark">#8f7ff8</color>
   </branding>
   <supports>
     <control>keyboard</control>
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.2.0" date="2026-11-08">
+      <description>
+        <p>A new desktop look: a true-black layout with a particle field that follows each request, a colour for each provider family, and a new particle-iris icon. Codex lists the models installed with the Codex CLI, and NVIDIA systems get the WebKitGTK setting they need automatically.</p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-11-08">
       <description>
         <p>Hardened configuration discovery, explicit provider privacy controls, bounded terminal layout, and patched TLS dependencies. Consilium is now published by Draconitic Labs.</p>

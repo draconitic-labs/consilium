@@ -6,7 +6,7 @@ on:
       tag:
         description: Published or draft release tag to verify
         required: true
-        default: v0.1.1
+        default: v0.2.0
         type: string
 
 permissions:

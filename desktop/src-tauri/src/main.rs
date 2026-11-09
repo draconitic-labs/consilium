@@ -54,6 +54,8 @@ struct AppState {
     config_error: Arc<Mutex<Option<String>>>,
     active_request: Arc<Mutex<Option<ActiveRequest>>>,
     store: SessionStore,
+    /// The installed Codex CLI's model catalog, read once per app session.
+    codex_catalog: Arc<tokio::sync::OnceCell<Option<Vec<codex::CodexModel>>>>,
 }
 
 impl AppState {
@@ -1013,8 +1015,22 @@ fn claude_models() -> Vec<ModelInfo> {
     ]
 }
 
-fn codex_models() -> Vec<ModelInfo> {
-    vec![ModelInfo {
+fn codex_effort_label(id: &str) -> String {
+    match id {
+        "low" => "Low Effort".into(),
+        "medium" => "Medium Effort".into(),
+        "high" => "High Effort".into(),
+        "xhigh" => "Extra High Effort".into(),
+        "max" => "Max Effort".into(),
+        "ultra" => "Ultra Effort".into(),
+        other => other.to_string(),
+    }
+}
+
+/// "Codex CLI default" first, then every model the installed Codex lists,
+/// with the efforts and default that Codex reports for each.
+fn codex_models(catalog: Option<&[codex::CodexModel]>) -> Vec<ModelInfo> {
+    let mut models = vec![ModelInfo {
         id: "default".into(),
         name: "Codex CLI default".into(),
         description: Some(
@@ -1023,7 +1039,43 @@ fn codex_models() -> Vec<ModelInfo> {
         context_window: None,
         supports_effort: true,
         efforts: codex_reasoning_efforts(),
-    }]
+    }];
+    for model in catalog.unwrap_or_default() {
+        if model.slug == "default" {
+            continue;
+        }
+        models.push(ModelInfo {
+            id: model.slug.clone(),
+            name: model.display_name.clone(),
+            description: model.description.clone(),
+            context_window: model.context_window,
+            supports_effort: !model.efforts.is_empty(),
+            efforts: model
+                .efforts
+                .iter()
+                .map(|effort| EffortInfo {
+                    id: effort.id.clone(),
+                    label: codex_effort_label(&effort.id),
+                    description: effort.description.clone().unwrap_or_default(),
+                    default: model.default_effort.as_deref() == Some(effort.id.as_str()),
+                })
+                .collect(),
+        });
+    }
+    models
+}
+
+async fn codex_catalog(state: &AppState) -> Option<Vec<codex::CodexModel>> {
+    state
+        .codex_catalog
+        .get_or_init(|| async {
+            match codex::find_codex() {
+                Some(program) => codex::discover_models(&program).await,
+                None => None,
+            }
+        })
+        .await
+        .clone()
 }
 
 fn open_model_suggestions(provider: &str) -> Vec<OpenModelInfo> {
@@ -1078,15 +1130,15 @@ fn current_api_model(provider: &str, state: &AppState) -> Vec<ModelInfo> {
 }
 
 #[tauri::command]
-fn list_models(state: State<AppState>) -> Vec<ModelInfo> {
+async fn list_models(state: State<'_, AppState>) -> Result<Vec<ModelInfo>, String> {
     let provider = state.selected_provider();
-    match provider.as_str() {
+    Ok(match provider.as_str() {
         "grok" => grok_models(),
         "gemini" => gemini_models(),
         "claude" => claude_models(),
-        "codex" => codex_models(),
+        "codex" => codex_models(codex_catalog(&state).await.as_deref()),
         _ => current_api_model(&provider, &state),
-    }
+    })
 }
 
 #[tauri::command]
@@ -1729,7 +1781,34 @@ fn initial_route() -> (String, String, HashMap<String, Backend>, Option<String>)
     (provider, profile, backends, config_error)
 }
 
+/// On the NVIDIA driver, WebKitGTK's default DMA-BUF renderer gives a blank
+/// window under X11 and a slower one under Wayland; shared-memory buffers fix
+/// both. A choice the user already made in either variable is kept.
+#[cfg(target_os = "linux")]
+fn webkit_env_for_nvidia(
+    nvidia_driver: bool,
+    user_has_set: impl Fn(&str) -> bool,
+) -> Option<(&'static str, &'static str)> {
+    if !nvidia_driver
+        || user_has_set("WEBKIT_DMABUF_RENDERER_FORCE_SHM")
+        || user_has_set("WEBKIT_DISABLE_DMABUF_RENDERER")
+    {
+        return None;
+    }
+    Some(("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1"))
+}
+
 fn main() {
+    // Before any thread starts: WebKitGTK reads this when the window opens.
+    #[cfg(target_os = "linux")]
+    if let Some((key, value)) =
+        webkit_env_for_nvidia(Path::new("/proc/driver/nvidia/version").exists(), |key| {
+            std::env::var_os(key).is_some()
+        })
+    {
+        std::env::set_var(key, value);
+    }
+
     let mut args = std::env::args_os().skip(1);
     if args.next().as_deref() == Some(OsStr::new("--gemini-login")) {
         #[cfg(unix)]
@@ -1775,6 +1854,7 @@ fn main() {
             config_error: Arc::new(Mutex::new(config_error)),
             active_request: Arc::new(Mutex::new(None)),
             store: SessionStore::at_default_location(),
+            codex_catalog: Arc::new(tokio::sync::OnceCell::new()),
         })
         .invoke_handler(tauri::generate_handler![
             status,
@@ -1811,6 +1891,60 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn nvidia_driver_gets_shared_memory_webkit_buffers_unless_the_user_chose() {
+        let none_set = |_: &str| false;
+        assert_eq!(
+            webkit_env_for_nvidia(true, none_set),
+            Some(("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1"))
+        );
+        assert_eq!(webkit_env_for_nvidia(false, none_set), None);
+        for chosen in [
+            "WEBKIT_DMABUF_RENDERER_FORCE_SHM",
+            "WEBKIT_DISABLE_DMABUF_RENDERER",
+        ] {
+            assert_eq!(
+                webkit_env_for_nvidia(true, |key: &str| key == chosen),
+                None,
+                "{chosen}"
+            );
+        }
+    }
+
+    #[test]
+    fn codex_models_lead_with_the_cli_default_then_list_the_catalog() {
+        let catalog = codex::parse_model_catalog(include_str!(
+            "../../../core/tests/fixtures/codex-debug-models-0.167.0.json"
+        ));
+        let models = codex_models(Some(&catalog));
+        assert_eq!(models[0].id, "default");
+        assert_eq!(models.len(), catalog.len() + 1);
+        let sol = &models[1];
+        assert_eq!(sol.id, "gpt-6.1-sol");
+        assert_eq!(sol.name, "GPT-6.1-Sol");
+        assert!(sol.supports_effort);
+        let defaults: Vec<&str> = sol
+            .efforts
+            .iter()
+            .filter(|effort| effort.default)
+            .map(|effort| effort.id.as_str())
+            .collect();
+        assert_eq!(defaults, ["low"]);
+        assert_eq!(
+            sol.efforts.last().map(|effort| effort.label.as_str()),
+            Some("Ultra Effort")
+        );
+        assert!(sol
+            .efforts
+            .iter()
+            .all(|effort| !effort.description.is_empty()));
+
+        let fallback = codex_models(None);
+        assert_eq!(fallback.len(), 1);
+        assert_eq!(fallback[0].id, "default");
+    }
 
     #[cfg(unix)]
     #[test]

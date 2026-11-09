@@ -11,17 +11,17 @@ use unicode_width::UnicodeWidthStr;
 use crate::app::{App, ConnectionState};
 use grok_chat_core::Backend;
 
-// Consilium's true-black, steel, neon-red palette is painted everywhere so
+// Consilium's true-black palette with its violet identity is painted everywhere so
 // the terminal profile never shows through.
 const BG: Color = Color::Rgb(0, 0, 0);
 const PANEL_BG: Color = Color::Rgb(6, 6, 7);
-const FG: Color = Color::Rgb(236, 236, 236);
-const DIM: Color = Color::Rgb(138, 141, 147);
-const ACCENT: Color = Color::Rgb(255, 23, 69);
-const USER: Color = Color::Rgb(45, 226, 230);
-const ERROR: Color = Color::Rgb(255, 180, 84);
-const INFO: Color = Color::Rgb(138, 141, 147);
-const SELECT_BG: Color = Color::Rgb(22, 9, 12);
+const FG: Color = Color::Rgb(230, 233, 242);
+const DIM: Color = Color::Rgb(154, 162, 184);
+const ACCENT: Color = Color::Rgb(143, 127, 248);
+const USER: Color = Color::Rgb(242, 244, 250);
+const ERROR: Color = Color::Rgb(255, 74, 94);
+const INFO: Color = Color::Rgb(154, 162, 184);
+const SELECT_BG: Color = Color::Rgb(18, 15, 36);
 
 const SIDEBAR_WIDTH: u16 = 24;
 const MAX_COMPOSER_LINES: u16 = 6;

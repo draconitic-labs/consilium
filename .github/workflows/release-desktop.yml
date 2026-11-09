@@ -9,7 +9,7 @@ on:
       tag:
         description: Existing draft release tag to verify
         required: true
-        default: v0.1.1
+        default: v0.2.0
         type: string
       reuse_existing_assets:
         description: Verify the existing draft assets without rebuilding bundles

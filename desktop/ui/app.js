@@ -27,6 +27,7 @@ const effortSelect = $("effort-select");
 const agentToggle = $("agent-toggle");
 const routingProfileSelect = $("routing-profile-select");
 const requestState = window.ConsiliumRequestState;
+const fieldState = window.ConsiliumFieldState;
 const GROK_DEFAULT_MODEL = "grok-4.5";
 
 let invoke, listen;
@@ -53,6 +54,161 @@ let providersById = {}; // id -> provider metadata from the desktop backend
 let assistantName = "Grok";
 let modelSupportsEffort = false;
 let implicitDefaultModel = null;
+
+/* ------- particle field ------- */
+// aurora/field.js is a module and may finish loading after this script, so
+// the wanted field state lives here and is applied once the field is ready.
+// On an empty chat the field forms an iris above the title; during a
+// conversation it dims and follows the request (thinking, writing, error).
+const MOTION_KEY = "consilium.motion";
+const fieldWanted = { world: "consilium", mood: "idle", motion: true };
+let fieldScene = null; // "empty" or "conversation"
+let fieldMoodShown = null;
+let fieldSwitching = false;
+let fieldErrorUntil = 0;
+
+function field() {
+  return window.ConsiliumField || null;
+}
+
+function fieldReady() {
+  if (field()) return Promise.resolve();
+  return new Promise((resolve) =>
+    document.addEventListener("consilium-field-ready", () => resolve(), { once: true })
+  );
+}
+
+function readMotionPreference() {
+  try {
+    return localStorage.getItem(MOTION_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+// The iris is a circle centred in the free space above the empty-state title.
+function irisAboveTitle() {
+  const canvas = $("field");
+  const title = emptyState.querySelector("h1");
+  if (!canvas || !title) return {};
+  const c = canvas.getBoundingClientRect();
+  const t = title.getBoundingClientRect();
+  const top = transcript.getBoundingClientRect().top;
+  if (!c.height || !c.width) return {};
+  const space = Math.max(0, t.top - top - 24);
+  const radius = Math.max(56, Math.min(c.height * 0.25, space / 2));
+  const centerY = top + 12 + space / 2 - c.top;
+  return {
+    cx: ((t.left + t.width / 2 - c.left) / c.width) * 2 - 1,
+    cy: -((centerY / c.height) * 2 - 1),
+    r0: (radius * 0.62) / (c.height / 2),
+    r1: radius / (c.height / 2),
+    sx: c.height / c.width,
+  };
+}
+
+function syncField(reform = false) {
+  const f = field();
+  if (!f || fieldSwitching) return;
+  const scene = emptyState.hidden ? "conversation" : "empty";
+  const mood = fieldWanted.mood === "idle" && scene === "empty" ? "iris" : fieldWanted.mood;
+  const changed = reform || scene !== fieldScene || mood !== fieldMoodShown;
+  fieldScene = scene;
+  fieldMoodShown = mood;
+  f.setDim(scene === "empty" ? 0 : 0.45);
+  f.setMood(mood);
+  if (changed && mood === "iris") f.setFormation("ring", irisAboveTitle(), 0.9);
+}
+
+function setFieldWorld(providerId) {
+  const world = fieldState.worldForProvider(providerId);
+  document.body.dataset.world = world;
+  fieldWanted.world = world;
+  if (!fieldSwitching) field()?.setProvider(world);
+}
+
+function setFieldMood(mood) {
+  if (mood === "idle" && Date.now() < fieldErrorUntil) return;
+  fieldWanted.mood = mood;
+  syncField();
+}
+
+function flashFieldError() {
+  fieldErrorUntil = Date.now() + 2400;
+  fieldWanted.mood = "error";
+  syncField();
+  setTimeout(() => {
+    if (Date.now() >= fieldErrorUntil) setFieldMood(fieldState.moodForState(stateText.textContent));
+  }, 2500);
+}
+
+function beginProviderCeremony(provider) {
+  const started = performance.now();
+  fieldSwitching = true;
+  document.body.classList.add("switching");
+  document.body.dataset.world = "consilium";
+  $("switch-label").textContent = `Loading ${provider.name}`;
+  $("switch-veil").classList.add("on");
+  const f = field();
+  if (f) {
+    f.setProvider("consilium");
+    f.setMood("calibrating");
+    f.setDim(0.35);
+    const c = $("field").getBoundingClientRect();
+    f.setFormation("ring", { cx: 0, cy: 0, r0: 0.22, r1: 0.36, sx: c.width ? c.height / c.width : 1 }, 0.9);
+  }
+  return async function endProviderCeremony(providerId) {
+    const elapsed = performance.now() - started;
+    if (elapsed < 350) await new Promise((resolve) => setTimeout(resolve, 350 - elapsed));
+    fieldSwitching = false;
+    $("switch-veil").classList.remove("on");
+    document.body.classList.remove("switching");
+    setFieldWorld(providerId);
+    field()?.pulse(0, 0, 0.7);
+    syncField(true);
+  };
+}
+
+async function bootField() {
+  await fieldReady();
+  const f = field();
+  if (!f) return;
+  fieldWanted.motion = readMotionPreference();
+  f.setMotion(fieldWanted.motion);
+  f.setProvider(fieldWanted.world);
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (fieldWanted.motion && !reduced && !emptyState.hidden && !fieldSwitching) {
+    // the wordmark forms from the particles, then becomes the iris
+    try {
+      await document.fonts.load('700 150px "Space Grotesk"');
+    } catch {
+      // the wordmark falls back to the system face
+    }
+    const iris = irisAboveTitle();
+    f.setMood("calibrating");
+    f.setFormation(
+      "text",
+      { text: "CONSILIUM", fontPx: 150, cx: iris.cx || 0, cy: iris.cy || 0.3, width: 1.05 },
+      0.95
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1400));
+  }
+  document.body.classList.remove("booting");
+  syncField(true);
+}
+
+// The empty-state text stays hidden while the wordmark forms; never longer.
+setTimeout(() => document.body.classList.remove("booting"), 4000);
+
+new MutationObserver(() => syncField()).observe(emptyState, {
+  attributes: true,
+  attributeFilter: ["hidden"],
+});
+let fieldResizeTimer = null;
+addEventListener("resize", () => {
+  clearTimeout(fieldResizeTimer);
+  fieldResizeTimer = setTimeout(() => syncField(true), 200);
+});
 
 /* ------- state / status ------- */
 function setControlsBusy(isBusy) {
@@ -85,6 +241,7 @@ function setState(text, isBusy) {
   sendBtn.disabled = locked;
   stopBtn.disabled = !isBusy || terminalizing;
   setControlsBusy(isBusy);
+  setFieldMood(fieldState.moodForState(text));
 }
 
 function refreshConversationModeLabel() {
@@ -104,6 +261,7 @@ async function refreshStatus() {
   $("info-model").textContent = status.model;
   $("info-session").textContent = status.session;
   activeProvider = status.provider || activeProvider;
+  setFieldWorld(activeProvider);
   if (providerSelect && providersById[activeProvider]) {
     providerSelect.value = activeProvider;
     assistantName = providersById[activeProvider].name.split(/\s+/)[0];
@@ -283,19 +441,35 @@ function relTime(ms) {
   return `${Math.floor(d / 86_400_000)}d`;
 }
 
+let sessionList = [];
+
 async function refreshSessions() {
-  let list;
   try {
-    list = await invoke("list_sessions");
+    sessionList = await invoke("list_sessions");
     $("storage-alert").hidden = true;
   } catch (error) {
     await showStorageFailure(error);
     return;
   }
+  renderSessionList();
+}
+
+function renderSessionList() {
+  const query = $("session-search").value.trim().toLowerCase();
+  const shown = query
+    ? sessionList.filter((meta) => meta.title.toLowerCase().includes(query))
+    : sessionList;
   sessionsEl.innerHTML = "";
-  for (const meta of list) {
+  if (query && !shown.length) {
+    const none = document.createElement("div");
+    none.className = "sessions-empty";
+    none.textContent = "No chats match.";
+    sessionsEl.appendChild(none);
+  }
+  for (const meta of shown) {
     const item = document.createElement("div");
     item.className = "session-item" + (meta.id === currentId ? " active" : "");
+    item.dataset.world = fieldState.worldForProvider(meta.provider);
     const title = document.createElement("span");
     title.className = "title";
     title.textContent = meta.title;
@@ -348,6 +522,8 @@ async function refreshSessions() {
     sessionsEl.appendChild(item);
   }
 }
+
+$("session-search").addEventListener("input", renderSessionList);
 
 async function showStorageFailure(error) {
   const alert = $("storage-alert");
@@ -785,6 +961,7 @@ async function sendMessage(text) {
     streamMsg = null;
     requestSnapshot = null;
     busy = false;
+    flashFieldError();
     setState("ready", false);
     addMessage("error", "✗ error").textContent = String(e);
   }
@@ -1240,6 +1417,7 @@ async function populateProviders() {
     activeProvider = selected.id;
     assistantName = selected.name.split(/\s+/)[0];
   }
+  setFieldWorld(activeProvider);
   renderConnectors(providers);
   setControlsBusy(busy);
 }
@@ -1393,6 +1571,7 @@ providerSelect.addEventListener("change", async () => {
   }
   transitioning = true;
   setControlsBusy(true);
+  const endProviderCeremony = beginProviderCeremony(provider);
   try {
     await invoke("set_provider", { providerId: provider.id });
     await invoke("new_session");
@@ -1413,6 +1592,7 @@ providerSelect.addEventListener("change", async () => {
     providerSelect.value = activeProvider;
     addInfo(`Cannot switch provider: ${e}`);
   } finally {
+    await endProviderCeremony(activeProvider);
     transitioning = false;
     setControlsBusy(busy);
   }
@@ -1590,6 +1770,18 @@ async function openSetupAbout() {
   $("setup-about-dialog").showModal();
 }
 
+$("motion-toggle").checked = readMotionPreference();
+$("motion-toggle").addEventListener("change", () => {
+  const on = $("motion-toggle").checked;
+  try {
+    localStorage.setItem(MOTION_KEY, on ? "on" : "off");
+  } catch {
+    // the choice still applies to this window
+  }
+  fieldWanted.motion = on;
+  field()?.setMotion(on);
+});
+
 $("open-setup-about").addEventListener("click", openSetupAbout);
 $("open-setup-about-main").addEventListener("click", openSetupAbout);
 $("close-setup-about").addEventListener("click", () => {
@@ -1703,6 +1895,7 @@ async function boot() {
     setState("finishing…", true);
     activeRequestId = null;
     const error = String(event.payload.text);
+    flashFieldError();
     let completedRuntime = runtime;
     try {
       completedRuntime = await reconcileCompletedRuntime(runtime);
@@ -1781,6 +1974,7 @@ async function boot() {
   }
 }
 
+bootField().catch((error) => console.error("particle field", error));
 boot().catch((error) => {
   $("setup-error").textContent = `Consilium could not finish starting: ${String(error)}`;
   $("setup-screen").hidden = false;

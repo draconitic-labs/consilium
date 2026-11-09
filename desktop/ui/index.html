@@ -6,28 +6,28 @@
   <title>Consilium</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body class="booting">
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
-      <!-- Consilium mark: neon-red flying dragon silhouette -->
-      <g id="dragon-mark" fill="currentColor">
-        <path d="M 238,156 C 272,124 312,98 346,88 L 352,72 L 360,84 C 392,78 428,74 452,72 Q 412,94 368,118 Q 340,120 318,144 L 314,162 L 306,146 Q 290,148 272,158 L 238,198 Z"/>
-        <path d="M 212,152 C 182,124 152,108 126,104 L 120,90 L 112,102 C 88,100 58,102 34,106 Q 72,122 112,132 Q 136,134 156,154 L 160,170 L 166,156 Q 180,160 190,164 L 204,168 Z"/>
-        <path d="M 202,184 L 212,196 L 202,210 L 200,218 L 206,224 L 198,236 L 196,226 L 190,238 L 188,226 L 178,234 L 184,222 L 192,214 L 196,204 Z"/>
-        <path d="M 234,204 L 250,218 L 244,236 L 248,248 L 262,252 L 258,262 L 252,256 L 246,270 L 242,258 L 232,266 L 236,254 L 240,246 L 236,232 Z"/>
-        <path d="M 248,218 C 272,230 288,246 292,262 C 294,280 272,294 246,296 C 226,297 208,290 202,278 C 198,270 202,262 210,258 L 222,266 Q 214,272 216,278 Q 224,287 244,286 C 266,284 282,272 280,258 C 277,242 262,228 250,214 L 260,220 L 266,226 L 274,222 L 280,240 L 286,234 L 256,208 Z"/>
-        <path d="M 204,92 L 182,72 L 198,94 L 194,96 L 176,84 L 192,102 L 200,106 L 196,112 L 188,108 L 194,124 L 191,132 L 183,128 L 189,140 L 188,148 L 180,144 L 187,156 L 190,162 L 196,166 L 208,170 L 212,160 L 218,176 L 228,182 L 232,172 L 238,188 L 246,194 L 250,184 L 254,200 L 256,208 L 248,220 C 232,220 216,214 208,208 C 198,198 197,186 199,178 C 202,166 206,158 210,152 L 222,144 L 238,138 L 264,134 L 242,120 L 254,114 L 272,110 L 264,100 C 252,94 240,92 232,94 C 220,88 210,88 204,92 Z"/>
+      <!-- Consilium mark: an orbit ring around a bright core -->
+      <g id="consilium-mark" fill="none" stroke="currentColor">
+        <circle cx="24" cy="24" r="3.2" fill="currentColor" stroke="none"/>
+        <ellipse cx="24" cy="24" rx="16.5" ry="6.6" stroke-width="1.6" opacity="0.85" transform="rotate(-27 24 24)"/>
+        <ellipse cx="24" cy="24" rx="16.5" ry="6.6" stroke-width="1.4" opacity="0.4" transform="rotate(33 24 24)"/>
+        <circle cx="37" cy="15.6" r="1.7" fill="currentColor" stroke="none"/>
       </g>
     </defs>
   </svg>
   <div id="shell">
     <aside id="sidebar">
       <div class="brand">
-        <svg class="logo" viewBox="0 0 480 360" aria-label="Consilium dragon"><use href="#dragon-mark"/></svg>
-        Consilium
+        <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><use href="#consilium-mark"/></svg>
+        <span class="wordmark">Consilium</span>
       </div>
       <button id="new-chat" type="button">＋ New chat</button>
       <div class="section-label">Recent</div>
+      <label class="visually-hidden" for="session-search">Search chats</label>
+      <input id="session-search" type="search" placeholder="Search chats" autocomplete="off" spellcheck="false" />
       <div id="sessions"></div>
       <dl id="info">
         <dt>Connection</dt><dd id="info-mode">—</dd>
@@ -41,9 +41,15 @@
         <span>Type <kbd>/</kbd> in the composer for commands</span>
         <button id="open-setup-about" type="button">Setup &amp; About</button>
       </div>
+      <a class="publisher" href="https://draconitic.com/" target="_blank" rel="noreferrer">
+        <img class="publisher-mark" src="brand/draconitic-mark.svg" alt="" width="22" height="22" />
+        <span>Draconitic Labs</span>
+      </a>
     </aside>
 
     <main id="main">
+      <canvas id="field" aria-hidden="true"></canvas>
+      <div id="switch-veil" aria-live="polite"><span id="switch-label"></span></div>
       <div id="storage-alert" role="alert" hidden>
         <span id="storage-alert-text"></span>
         <button id="restore-backup" type="button" hidden>Restore last-known-good backup</button>
@@ -51,7 +57,6 @@
       </div>
       <div id="transcript" role="log" aria-live="polite" aria-relevant="additions">
         <div id="empty-state">
-          <svg class="logo big" viewBox="0 0 480 360" aria-label="Consilium dragon"><use href="#dragon-mark"/></svg>
           <h1>Consilium</h1>
           <p class="tagline">One harness. Every agent.</p>
           <p>Ask anything, then press Enter.<br />
@@ -124,7 +129,7 @@
   </div>
 
   <div id="setup-screen" hidden>
-    <svg class="logo big" viewBox="0 0 480 360" aria-label="Consilium dragon"><use href="#dragon-mark"/></svg>
+    <svg class="logo big" viewBox="0 0 48 48" aria-hidden="true"><use href="#consilium-mark"/></svg>
     <h1>Setup needed</h1>
     <p id="setup-error"></p>
     <button id="dismiss-setup" type="button">Open setup guide</button>
@@ -171,9 +176,17 @@ OPENAI_COMPAT_MODEL=qwen3:8b</code></pre>
       <p>Launch an installed provider's own account flow here. Complete it in the terminal/browser it opens, then restart Consilium.</p>
       <div id="setup-signin-actions"></div>
     </section>
+    <section class="setup-motion">
+      <h3>Display</h3>
+      <label class="motion-setting">
+        <input type="checkbox" id="motion-toggle" checked />
+        <span>Animated particle field</span>
+      </label>
+      <p>When off, the field stays as a still image. The system reduced-motion setting is always honored.</p>
+    </section>
     <dl class="about-facts">
       <dt>Version</dt><dd id="about-version">—</dd>
-      <dt>Publisher</dt><dd>Draconitic Labs</dd>
+      <dt>Publisher</dt><dd class="publisher-row"><img class="publisher-mark" src="brand/draconitic-mark.svg" alt="" width="20" height="20" /><span>Draconitic Labs</span></dd>
       <dt>License</dt><dd>Apache-2.0</dd>
       <dt>Configuration</dt><dd><code id="about-config-path">—</code></dd>
       <dt>Session history</dt><dd><code id="about-session-path">—</code></dd>
@@ -185,6 +198,8 @@ OPENAI_COMPAT_MODEL=qwen3:8b</code></pre>
   <script src="markdown.js"></script>
   <script src="preamble.js"></script>
   <script src="request-state.js"></script>
+  <script src="field-state.js"></script>
   <script src="app.js"></script>
+  <script type="module" src="aurora/field.js"></script>
 </body>
 </html>

@@ -1,6 +1,7 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
 use serde_json::Value;
@@ -15,6 +16,144 @@ use crate::child_io::{
 
 pub fn find_codex() -> Option<PathBuf> {
     find_program(CliProvider::Codex)
+}
+
+/// A model listed by the installed Codex CLI's own catalog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodexModel {
+    pub slug: String,
+    pub display_name: String,
+    pub description: Option<String>,
+    pub context_window: Option<u64>,
+    pub default_effort: Option<String>,
+    pub efforts: Vec<CodexEffort>,
+}
+
+/// A reasoning effort that a listed Codex model accepts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodexEffort {
+    pub id: String,
+    pub description: Option<String>,
+}
+
+const CODEX_CATALOG_TIMEOUT: Duration = Duration::from_secs(8);
+const CODEX_CATALOG_MAX_BYTES: usize = 8 * 1024 * 1024;
+const CODEX_CATALOG_MAX_MODELS: usize = 64;
+
+/// Model slugs and effort ids reach the Codex command line, so only plain
+/// identifiers are accepted.
+fn is_plain_identifier(value: &str, max_len: usize) -> bool {
+    !value.is_empty()
+        && value.len() <= max_len
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ':'))
+}
+
+fn is_effort_id(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 16 && value.chars().all(|c| c.is_ascii_lowercase())
+}
+
+fn bounded_text(value: Option<&Value>, max_len: usize) -> Option<String> {
+    value
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|text| {
+            !text.is_empty() && text.len() <= max_len && !text.chars().any(char::is_control)
+        })
+        .map(str::to_owned)
+}
+
+/// Parses the JSON printed by `codex debug models`: models Codex marks as
+/// listed, in Codex's own priority order. Hidden models, malformed entries
+/// and unsafe identifiers are skipped; unreadable output gives an empty list.
+pub fn parse_model_catalog(json: &str) -> Vec<CodexModel> {
+    let Ok(value) = serde_json::from_str::<Value>(json) else {
+        return Vec::new();
+    };
+    let Some(models) = value.get("models").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    let mut listed: Vec<(i64, CodexModel)> = models
+        .iter()
+        .filter_map(|model| {
+            if model.get("visibility").and_then(Value::as_str) != Some("list") {
+                return None;
+            }
+            let slug = model.get("slug")?.as_str()?;
+            if !is_plain_identifier(slug, 128) {
+                return None;
+            }
+            let efforts: Vec<CodexEffort> = model
+                .get("supported_reasoning_levels")
+                .and_then(Value::as_array)
+                .map(|levels| {
+                    levels
+                        .iter()
+                        .filter_map(|level| {
+                            let id = level.get("effort")?.as_str()?;
+                            is_effort_id(id).then(|| CodexEffort {
+                                id: id.to_owned(),
+                                description: bounded_text(level.get("description"), 256),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let default_effort = model
+                .get("default_reasoning_level")
+                .and_then(Value::as_str)
+                .filter(|id| efforts.iter().any(|effort| effort.id == *id))
+                .map(str::to_owned);
+            let priority = model
+                .get("priority")
+                .and_then(Value::as_i64)
+                .unwrap_or(i64::MAX);
+            Some((
+                priority,
+                CodexModel {
+                    slug: slug.to_owned(),
+                    display_name: bounded_text(model.get("display_name"), 128)
+                        .unwrap_or_else(|| slug.to_owned()),
+                    description: bounded_text(model.get("description"), 512),
+                    context_window: model.get("context_window").and_then(Value::as_u64),
+                    default_effort,
+                    efforts,
+                },
+            ))
+        })
+        .collect();
+    listed.sort_by_key(|(priority, _)| *priority);
+    let mut seen = std::collections::HashSet::new();
+    listed
+        .into_iter()
+        .map(|(_, model)| model)
+        .filter(|model| seen.insert(model.slug.clone()))
+        .take(CODEX_CATALOG_MAX_MODELS)
+        .collect()
+}
+
+/// Reads the installed Codex CLI's model catalog with `codex debug models`.
+/// Returns `None` when the command is missing, fails, times out, prints too
+/// much, or lists no usable model, so callers keep the "default" choice.
+pub async fn discover_models(program: &Path) -> Option<Vec<CodexModel>> {
+    let mut command = tokio::process::Command::new(program);
+    command
+        .args(["debug", "models"])
+        .env_remove("OPENAI_API_KEY")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    let output = tokio::time::timeout(CODEX_CATALOG_TIMEOUT, command.output())
+        .await
+        .ok()?
+        .ok()?;
+    if !output.status.success() || output.stdout.len() > CODEX_CATALOG_MAX_BYTES {
+        return None;
+    }
+    let models = parse_model_catalog(std::str::from_utf8(&output.stdout).ok()?);
+    (!models.is_empty()).then_some(models)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -380,6 +519,93 @@ impl CodexBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const CODEX_CATALOG_0_167: &str =
+        include_str!("../tests/fixtures/codex-debug-models-0.167.0.json");
+
+    #[test]
+    fn model_catalog_lists_visible_models_in_codex_priority_order() {
+        let models = parse_model_catalog(CODEX_CATALOG_0_167);
+        let slugs: Vec<&str> = models.iter().map(|model| model.slug.as_str()).collect();
+        assert_eq!(
+            slugs,
+            [
+                "gpt-6.1-sol",
+                "gpt-6-astra",
+                "gpt-6-sol",
+                "gpt-6-luna",
+                "gpt-5.6-sol",
+                "gpt-6.1-terra",
+                "gpt-5.6-terra",
+                "gpt-5.6-luna",
+                "gpt-5.5",
+            ]
+        );
+        let sol = &models[0];
+        assert_eq!(sol.display_name, "GPT-6.1-Sol");
+        assert_eq!(sol.context_window, Some(272_000));
+        assert_eq!(sol.default_effort.as_deref(), Some("low"));
+        let efforts: Vec<&str> = sol
+            .efforts
+            .iter()
+            .map(|effort| effort.id.as_str())
+            .collect();
+        assert_eq!(efforts, ["low", "medium", "high", "xhigh", "max", "ultra"]);
+        assert!(sol.efforts[0].description.is_some());
+        let older = models
+            .iter()
+            .find(|model| model.slug == "gpt-5.5")
+            .expect("gpt-5.5");
+        let efforts: Vec<&str> = older
+            .efforts
+            .iter()
+            .map(|effort| effort.id.as_str())
+            .collect();
+        assert_eq!(efforts, ["low", "medium", "high", "xhigh"]);
+    }
+
+    #[test]
+    fn model_catalog_skips_unsafe_hidden_and_malformed_entries() {
+        let json = r#"{"models":[
+            {"slug":"good-1","display_name":"Good","visibility":"list","priority":2,
+             "default_reasoning_level":"ultra",
+             "supported_reasoning_levels":[{"effort":"low"},{"effort":"high\"; rm"},{"effort":"medium"}]},
+            {"slug":"bad slug\";x","visibility":"list","priority":1},
+            {"slug":"hidden","visibility":"hide","priority":0},
+            {"display_name":"no slug","visibility":"list"},
+            {"slug":"good-1","display_name":"Duplicate","visibility":"list","priority":3},
+            "not an object"
+        ]}"#;
+        let models = parse_model_catalog(json);
+        assert_eq!(models.len(), 1);
+        let model = &models[0];
+        assert_eq!(model.slug, "good-1");
+        assert_eq!(model.display_name, "Good");
+        let efforts: Vec<&str> = model
+            .efforts
+            .iter()
+            .map(|effort| effort.id.as_str())
+            .collect();
+        assert_eq!(efforts, ["low", "medium"]);
+        assert_eq!(
+            model.default_effort, None,
+            "a default outside the list is dropped"
+        );
+    }
+
+    #[test]
+    fn unreadable_model_catalog_is_empty() {
+        assert!(parse_model_catalog("").is_empty());
+        assert!(parse_model_catalog("not json").is_empty());
+        assert!(parse_model_catalog(r#"{"models":"nope"}"#).is_empty());
+        assert!(parse_model_catalog("[]").is_empty());
+    }
+
+    #[tokio::test]
+    async fn missing_codex_program_gives_no_catalog() {
+        let missing = std::env::temp_dir().join("consilium-no-such-codex-binary");
+        assert_eq!(discover_models(&missing).await, None);
+    }
 
     #[test]
     fn parses_codex_thread_message_reasoning_and_completion() {
