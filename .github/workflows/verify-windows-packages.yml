@@ -6,7 +6,7 @@ on:
       tag:
         description: Published or draft release tag to verify
         required: true
-        default: v0.1.0
+        default: v0.1.1
         type: string
 
 permissions:
@@ -142,7 +142,7 @@ jobs:
               $arp = Get-ItemProperty $arpKey
               if ($arp.DisplayName -ne 'Consilium' -or
                   $arp.DisplayVersion -ne $env:EXPECTED_VERSION -or
-                  $arp.Publisher -ne 'Flintglade') {
+                  $arp.Publisher -ne 'Draconitic Labs') {
                 throw 'NSIS Add/Remove Programs metadata is incorrect'
               }
               $actualLocation = [IO.Path]::GetFullPath(
@@ -187,7 +187,7 @@ jobs:
                   'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' `
                   -ErrorAction SilentlyContinue
               ) | Where-Object {
-                $_.DisplayName -eq 'Consilium' -and $_.Publisher -eq 'Flintglade'
+                $_.DisplayName -eq 'Consilium' -and $_.Publisher -eq 'Draconitic Labs'
               }
               if (@($arp).Count -ne 1) { throw 'Expected exactly one MSI ARP entry' }
               if ($arp.DisplayVersion -ne $env:EXPECTED_VERSION) {

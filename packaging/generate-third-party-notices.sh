@@ -449,7 +449,7 @@ lock_hash="$(sha256sum Cargo.lock | awk '{print $1}')"
     'This deterministic inventory is generated from the complete dependency' \
     'graph resolved by the repository Cargo.lock. License expressions, package' \
     'authors, repositories, and Cargo source identifiers are reproduced exactly;' \
-    'they are not rewritten or interpreted by Flintglade.' \
+    'they are not rewritten or interpreted by Draconitic Labs.' \
     '' \
     'The second section carries the exact license, copyright, attribution, and' \
     'notice files found in the locked crate archives used by the distributed' \

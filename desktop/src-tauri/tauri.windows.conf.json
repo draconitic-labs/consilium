@@ -4,10 +4,10 @@
     "active": true,
     "targets": ["nsis", "msi"],
     "category": "Productivity",
-    "publisher": "Flintglade",
-    "homepage": "https://flintglade.com/",
+    "publisher": "Draconitic Labs",
+    "homepage": "https://ai.draconitic.com/consilium",
     "shortDescription": "A multi-provider AI harness for local and optional cloud models",
-    "longDescription": "Consilium is Flintglade's free and open-source desktop harness for conversations with local OpenAI-compatible models, provider CLIs, and optional direct APIs.",
+    "longDescription": "Consilium is Draconitic Labs' free and open-source desktop harness for conversations with local OpenAI-compatible models, provider CLIs, and optional direct APIs.",
     "license": "Apache-2.0",
     "licenseFile": "../../LICENSE",
     "resources": {

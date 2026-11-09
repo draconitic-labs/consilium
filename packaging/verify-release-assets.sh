@@ -59,8 +59,9 @@ for artifact in "$appimage" "$deb" "$rpm_package" "$nsis" "$msi" "$portable"; do
 done
 
 version="$(jq -r '.version' desktop/src-tauri/tauri.conf.json)"
-homepage="https://flintglade.com/"
-linux_publisher="Flintglade <support@flintglade.com>"
+homepage="https://ai.draconitic.com/consilium"
+publisher="Draconitic Labs"
+linux_publisher="${publisher} <support@draconitic.com>"
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 
@@ -192,8 +193,8 @@ verify_windows_x86_64_executable \
   "$work_dir/portable-Consilium.exe" \
   'portable Consilium.exe'
 unzip -p "$portable" README.txt >"$work_dir/portable-readme"
-grep -Fq 'https://flintglade.com/' "$work_dir/portable-readme" ||
-  fail 'portable README is missing the Flintglade homepage'
+grep -Fq "$homepage" "$work_dir/portable-readme" ||
+  fail 'portable README is missing the project homepage'
 grep -Fq 'https://www.patreon.com/c/zach457' "$work_dir/portable-readme" ||
   fail 'portable README is missing optional project support information'
 
@@ -217,8 +218,8 @@ msi_manufacturer="$(msi_property Manufacturer)"
   fail "MSI ProductName is ${msi_name:-<missing>}, expected Consilium"
 [[ "$msi_version" == "$version" ]] ||
   fail "MSI ProductVersion is ${msi_version:-<missing>}, expected $version"
-[[ "$msi_manufacturer" == 'Flintglade' ]] ||
-  fail "MSI Manufacturer is ${msi_manufacturer:-<missing>}, expected Flintglade"
+[[ "$msi_manufacturer" == "$publisher" ]] ||
+  fail "MSI Manufacturer is ${msi_manufacturer:-<missing>}, expected $publisher"
 msi_template="$({
   msiinfo suminfo "$msi" |
     awk -F ':' '/^[[:space:]]*Template:/ {

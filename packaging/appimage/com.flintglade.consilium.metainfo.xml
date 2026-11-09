@@ -6,8 +6,8 @@
   <project_license>Apache-2.0</project_license>
   <name>Consilium</name>
   <summary>Route AI chats across local and optional providers</summary>
-  <developer id="com.flintglade">
-    <name>Flintglade</name>
+  <developer id="com.draconiticlabs">
+    <name>Draconitic Labs</name>
   </developer>
   <description>
     <p>Consilium is a free and open-source desktop harness for chatting with local models, official provider command-line tools, and optional direct APIs.</p>
@@ -17,7 +17,7 @@
   <provides>
     <binary>grok-chat-desktop</binary>
   </provides>
-  <url type="homepage">https://flintglade.com/</url>
+  <url type="homepage">https://ai.draconitic.com/consilium</url>
   <url type="vcs-browser">https://github.com/draconitic-labs/consilium</url>
   <url type="bugtracker">https://github.com/draconitic-labs/consilium/issues</url>
   <url type="donation">https://www.patreon.com/c/zach457</url>
@@ -31,9 +31,9 @@
     <control>pointing</control>
   </supports>
   <releases>
-    <release version="0.1.1" date="2026-10-09">
+    <release version="0.1.1" date="2026-11-08">
       <description>
-        <p>Hardened configuration discovery, explicit provider privacy controls, bounded terminal layout, and patched TLS dependencies.</p>
+        <p>Hardened configuration discovery, explicit provider privacy controls, bounded terminal layout, and patched TLS dependencies. Consilium is now published by Draconitic Labs.</p>
       </description>
     </release>
     <release version="0.1.0" date="2026-07-13">

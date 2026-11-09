@@ -3,8 +3,8 @@ name = "grok-chat"
 version = "0.1.1"
 edition = "2021"
 license = "Apache-2.0"
-authors = ["Flintglade <support@flintglade.com>"]
-homepage = "https://flintglade.com/"
+authors = ["Draconitic Labs <support@draconitic.com>"]
+homepage = "https://ai.draconitic.com/consilium"
 repository = "https://github.com/draconitic-labs/consilium"
 description = "Consilium terminal interface for Grok CLI and the optional xAI API"
 

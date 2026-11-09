@@ -1570,7 +1570,7 @@ fn app_info(state: State<AppState>) -> AppInfo {
     AppInfo {
         name: "Consilium",
         version: env!("CARGO_PKG_VERSION"),
-        publisher: "Flintglade",
+        publisher: "Draconitic Labs",
         license: "Apache-2.0",
         repository: "https://github.com/draconitic-labs/consilium",
         config_path: grok_chat_core::user_config_env_path()

@@ -25,7 +25,7 @@ const HELP: &str = concat!(
     "Consilium ",
     env!("CARGO_PKG_VERSION"),
     "\n",
-    "Flintglade's free, open-source terminal workspace for Grok CLI and the optional xAI API.\n\n",
+    "Draconitic Labs' free, open-source terminal workspace for Grok CLI and the optional xAI API.\n\n",
     "Usage: grok-chat [OPTIONS]\n\n",
     "Options:\n",
     "  -h, --help     Print help\n",

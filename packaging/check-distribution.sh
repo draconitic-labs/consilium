@@ -6,10 +6,11 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 mode="${1:-local}"
 tag="${2:-}"
 app_id="com.flintglade.consilium"
-homepage="https://flintglade.com/"
+homepage="https://ai.draconitic.com/consilium"
 repository="https://github.com/draconitic-labs/consilium"
 patreon="https://www.patreon.com/c/zach457"
-linux_publisher="Flintglade <support@flintglade.com>"
+publisher="Draconitic Labs"
+linux_publisher="${publisher} <support@draconitic.com>"
 meta="packaging/flatpak/${app_id}.metainfo.xml"
 appimage_meta="packaging/appimage/${app_id}.metainfo.xml"
 desktop="packaging/flatpak/${app_id}.desktop"
@@ -47,10 +48,10 @@ jq -e --arg homepage "$homepage" --arg publisher "$linux_publisher" '
   .bundle.linux.rpm.files["/usr/share/licenses/consilium/THIRD_PARTY_NOTICES.txt"] == "../../THIRD_PARTY_NOTICES.txt"
 ' desktop/src-tauri/tauri.linux.conf.json >/dev/null ||
   fail "Linux bundle metadata, publisher, or notice payload mapping is incomplete"
-jq -e --arg homepage "$homepage" '
+jq -e --arg homepage "$homepage" --arg publisher "$publisher" '
   .bundle.active == true and
   .bundle.targets == ["nsis", "msi"] and
-  .bundle.publisher == "Flintglade" and
+  .bundle.publisher == $publisher and
   .bundle.homepage == $homepage and
   .bundle.license == "Apache-2.0" and
   .bundle.licenseFile == "../../LICENSE" and
@@ -64,11 +65,11 @@ for manifest in core/Cargo.toml tui/Cargo.toml desktop/src-tauri/Cargo.toml; do
   [[ "$package_version" == "$version" ]] || fail "$manifest is $package_version, expected $version"
 done
 cargo metadata --locked --no-deps --format-version 1 |
-  jq -e --arg homepage "$homepage" --arg repository "$repository" '
+  jq -e --arg homepage "$homepage" --arg repository "$repository" --arg author "$linux_publisher" '
     . as $metadata |
     ($metadata.packages | length == 3) and
     all($metadata.packages[];
-      .authors == ["Flintglade <support@flintglade.com>"] and
+      .authors == [$author] and
       .homepage == $homepage and
       .repository == $repository and
       .license == "Apache-2.0"
@@ -88,7 +89,7 @@ appstreamcli validate --no-net "$appimage_meta"
 
 [[ -s desktop/src-tauri/icons/icon.png ]] || fail "Linux icon is missing"
 [[ -s desktop/src-tauri/icons/icon.ico ]] || fail "Windows icon is missing"
-[[ -s desktop/icons/consilium.svg ]] || fail "scalable Flintglade icon is missing"
+[[ -s desktop/icons/consilium.svg ]] || fail "scalable Consilium icon is missing"
 [[ -s packaging/flatpak/cargo-sources.json ]] || fail "offline Cargo sources are missing"
 python3 - <<'PY'
 import json
@@ -132,8 +133,12 @@ grep -Fq "<id>${app_id}</id>" "$meta" || fail "AppStream ID mismatch"
 grep -Fq '<project_license>Apache-2.0</project_license>' "$meta" ||
   fail "AppStream license mismatch"
 grep -Fq "Icon=${app_id}" "$desktop" || fail "desktop icon ID mismatch"
-grep -Fq "<url type=\"homepage\">${homepage}</url>" "$meta" ||
-  fail "AppStream homepage mismatch"
+for metainfo in "$meta" "$appimage_meta"; do
+  grep -Fq "<url type=\"homepage\">${homepage}</url>" "$metainfo" ||
+    fail "$metainfo homepage mismatch"
+  grep -Fq "<name>${publisher}</name>" "$metainfo" ||
+    fail "$metainfo developer name mismatch"
+done
 grep -Fq "<url type=\"vcs-browser\">${repository}</url>" "$meta" ||
   fail "AppStream repository URL mismatch"
 grep -Fq "<url type=\"donation\">${patreon}</url>" "$meta" ||
